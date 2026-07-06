@@ -1,6 +1,33 @@
 @import "tailwindcss";
 
+/* Empowr CIC brand tokens — source of truth: F:\Projects\Empowr CIC\brand-identity.md.
+   Match those values exactly; never add brand colours here without updating that file first. */
 @theme {
-  /* Brand tokens — populated from brand-identity.md via /init-brand */
   --font-sans: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
+
+  /* Primary — Blue */
+  --color-blue: #4a70c2;
+  --color-blue-dark: #3558a8;
+  --color-blue-light: #7093d4;
+  --color-blue-pale: #eef3fc;
+  --color-blue-soft: rgba(74, 112, 194, 0.1);
+
+  /* Accent — Red */
+  --color-red: #ff6161;
+  --color-red-dark: #e04444;
+  --color-red-soft: rgba(255, 97, 97, 0.09);
+
+  /* Neutrals */
+  --color-black: #1b1b1b;
+  --color-mid: #4a4a4a;
+  --color-muted: #7a7a8a;
+  --color-cream: #f8f7f4;
+  --color-warm-white: #fdfcfa;
+  --color-card: #ffffff;
+  --color-line: #e5e1db;
+
+  /* Shadows */
+  --shadow-blue: 0 4px 16px rgba(74, 112, 194, 0.26);
+  --shadow-sm: 0 8px 24px rgba(27, 27, 27, 0.07);
+  --shadow-md: 0 12px 32px rgba(27, 27, 27, 0.08);
 }

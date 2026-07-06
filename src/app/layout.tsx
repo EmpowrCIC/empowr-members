@@ -8,6 +8,10 @@ export const metadata: Metadata = {
   title: "Empowr Members",
   description:
     "Book sessions, manage your membership, and access everything Empowr CIC offers — in one place.",
+  manifest: "/site.webmanifest",
+  icons: {
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export default function RootLayout({
