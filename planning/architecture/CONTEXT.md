@@ -72,6 +72,56 @@ mem_credits         account_id, amount_pence, source_booking_id, expires_at,
 - Refund/credit on cancellation: ≥48 hrs → Stripe refund or `mem_credits` row (member's choice); <48 hrs → blocked; non-refundable offerings → always blocked
 - Memberships (Phase 2): Stripe Billing subscription → webhook lifecycle sync → `mem_memberships.status`; entitlement check replaces payment step at booking
 
+## Application Structure
+
+Three route groups keep URLs clean while separating the access tiers: public, member (session guard), admin (allowlist guard).
+
+```
+app/
+├── (public)/                          anyone, logged out
+│   ├── page.tsx                       home — session discovery + membership pitch
+│   ├── sessions/page.tsx              catalogue (filter by type / age / day)
+│   ├── sessions/[slug]/page.tsx       offering detail — schedule, price, venue, kit list, book CTA
+│   ├── memberships/page.tsx           plans + pricing (Phase 2 — holding copy in P1)
+│   ├── login/page.tsx                 magic link + password
+│   └── signup/page.tsx
+├── (member)/                          middleware: session guard
+│   ├── account/page.tsx               profile, household (participants), waiver status
+│   ├── bookings/page.tsx              my bookings — upcoming/past, cancel action
+│   ├── book/[occurrenceId]/page.tsx   booking flow: participants → waiver gate → checkout
+│   ├── book/run/[runId]/page.tsx      course-run enrolment (same flow, per_run)
+│   └── membership/page.tsx            my plan, usage, Stripe portal link (Phase 2)
+├── (admin)/                           middleware: ADMIN_EMAILS allowlist
+│   └── admin/
+│       ├── page.tsx                   dashboard — today's occurrences, pending issues
+│       ├── offerings/…                CRUD + occurrence/run scheduling
+│       ├── venues/…                   CRUD
+│       └── registers/[occurrenceId]/  register view; check-in from Phase 3
+└── api/
+    ├── bookings/route.ts              POST — validate, insert pending_payment, create Checkout session
+    ├── bookings/[id]/cancel/route.ts  POST — policy check, refund or credit
+    ├── admin/…                        admin mutations (service client)
+    └── webhooks/stripe/route.ts       checkout + subscription lifecycle events
+```
+
+**Key components** (`components/`): `OfferingCard`, `OccurrencePicker` (calendar/list), `ParticipantSelect`, `WaiverGate`, `BookingSummary`, `PolicyNotice` (refund rules per offering), `RegisterTable` (admin), shadcn primitives underneath.
+
+**Middleware:** one `middleware.ts` — Supabase session refresh + route-group guards per `_config/guides/auth-middleware.md`.
+
+## Dependencies (installed at Phase 1 kickoff, not scaffold)
+
+| Package | For |
+|---|---|
+| `@supabase/supabase-js` + `@supabase/ssr` | DB + auth clients (browser/server/middleware) |
+| `stripe` + `@stripe/stripe-js` | Server SDK + Checkout redirect |
+| `resend` + `react-email` | Transactional email + JSX templates |
+| `zod` + `react-hook-form` + `@hookform/resolvers` | Validation — every API route input parsed with zod |
+| `date-fns` + `date-fns-tz` | Occurrence times, Europe/London handling |
+| `framer-motion` | Light entrance/transition motion (stack guide) |
+| shadcn/ui components | On demand via `npx shadcn add` — form, dialog, table, calendar, card |
+
+Already in package.json: `lucide-react`, Tailwind 4, `@netlify/plugin-nextjs`.
+
 ## Request Lifecycle (booking)
 
 1. Member browses catalogue (server components, anon reads of active offerings/occurrences)
