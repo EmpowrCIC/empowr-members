@@ -2,7 +2,7 @@
 
 ## Current Status
 
-- Phase: Planning complete + MWP scaffold created (2026-07-06). Repo live at github.com/Pecuvate/empowr-members (main); parent Empowr CIC .gitignore updated.
+- Phase: Phase 0 in progress (2026-07-06). Steps 1–2 done: brand assets in + build verified; `mem_` schema live on empowr-cic (2 migrations, advisors clean, registry updated). Step 3 partial: signup trigger live; 4 dashboard auth settings outstanding (providers, redirect URLs, Resend SMTP, leaked-password protection). Step 4 (Netlify + domain) not started.
 - Complete: plan (planning/spec + planning/architecture), MWP scaffold, seeded ADRs, GitHub remote + registry entry, execution plans for ALL phases 0–4 (planning/phases/) with coverage review against the project aim
 - Outstanding: execute Phase 0 per planning/phases/phase-0/CONTEXT.md (brand → schema → auth → Netlify), then phases 1–4 in order
 
