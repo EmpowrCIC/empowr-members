@@ -1,6 +1,6 @@
 # Phase 0 — Foundation Build Plan
 
-Execution plan for Phase 0. Scope defined in [spec](../spec/CONTEXT.md); data model in [architecture](../architecture/CONTEXT.md). This file is the build checklist — archive or compress once Phase 0 closes.
+Execution plan for Phase 0. Scope defined in [spec](../../spec/CONTEXT.md); data model in [architecture](../../architecture/CONTEXT.md). This file is the build checklist — compress to a summary once Phase 0 closes.
 
 **Phase 0 is done when:** the `mem_` schema is live in Supabase with RLS verified, a test signup creates a `mem_accounts` row, brand assets are in place, and the holding page is live at https://members.empowrcic.org over SSL.
 
@@ -21,7 +21,7 @@ Write `src/supabase/migrations/<timestamp>_members_initial_schema.sql` locally f
 **2a. Enums**
 `mem_offering_type` (drop_in, lesson, course, camp, event) · `mem_booking_status` (pending_payment, confirmed, cancelled, credited, refunded, attended, no_show) · `mem_occurrence_status` (scheduled, cancelled_by_empowr, completed) · `mem_refund_policy` (standard, non_refundable) · `mem_enrolment_scope` (per_occurrence, per_run) · `mem_booking_source` (online, walk_in, member) · `mem_membership_status` (active, past_due, cancelled)
 
-**2b. Tables** — in dependency order per the [architecture data model](../architecture/CONTEXT.md): `mem_accounts` (FK → auth.users), `mem_venues`, `mem_offerings`, `mem_course_runs`, `mem_occurrences`, `mem_participants` (nullable FK → `people` for waiver link), `mem_membership_plans`, `mem_plan_entitlements`, `mem_memberships`, `mem_bookings`, `mem_credits`. All with `created_at`/`updated_at` + `set_updated_at` trigger (new `mem_set_updated_at()` — do not reuse other apps' trigger functions).
+**2b. Tables** — in dependency order per the [architecture data model](../../architecture/CONTEXT.md): `mem_accounts` (FK → auth.users), `mem_venues`, `mem_offerings`, `mem_course_runs`, `mem_occurrences`, `mem_participants` (nullable FK → `people` for waiver link), `mem_membership_plans`, `mem_plan_entitlements`, `mem_memberships`, `mem_bookings`, `mem_credits`. All with `created_at`/`updated_at` + `set_updated_at` trigger (new `mem_set_updated_at()` — do not reuse other apps' trigger functions).
 
 **2c. RLS** — enabled on every table before the migration ends:
 - `member_account_id()` — SECURITY DEFINER, `search_path` set, anon EXECUTE revoked; returns the caller's `mem_accounts.id`. Policies never inline-subquery their own table (recursion rule)

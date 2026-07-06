@@ -49,6 +49,8 @@ Members create an account, manage their household (themselves + children), book 
 
 ## Build Phases
 
+> Execution plans (ordered steps, done-when criteria) live in [planning/phases/](../phases/CONTEXT.md). This section defines *what* each phase covers; the phase files define *how*.
+
 ### Phase 0 — Foundation
 MWP scaffold ✅ (2026-07-06) · brand assets (/init-brand) · GitHub repo + parent-repo .gitignore entry · Supabase migration 1 (`mem_` schema + RLS + helper fn) · Supabase Auth config (magic link + password, Resend SMTP) · Netlify site + members.empowrcic.org DNS
 

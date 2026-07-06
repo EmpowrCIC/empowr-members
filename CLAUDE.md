@@ -11,7 +11,7 @@ This file is the map. Workspace detail lives in each CONTEXT.md.
 | Feature spec / scope / phases | planning/spec/ | CONTEXT.md | — |
 | Architecture / data model / integrations | planning/architecture/ | CONTEXT.md | — |
 | Decision records (ADRs) | planning/decisions/ | CONTEXT.md | — |
-| Phase 0 build (schema, auth, brand, deploy) | planning/phase-0/ | CONTEXT.md | /init-brand, /netlify-deploy |
+| Phase execution (build steps for current phase) | planning/phases/ | CONTEXT.md → phase-N/ | — |
 | UI / components / app code | src/ | CONTEXT.md | /webapp-testing |
 | Deployment / going live | ops/ | CONTEXT.md | /netlify-deploy, /netlify-supabase-check |
 | Brand / favicon setup | ops/ | CONTEXT.md | /init-brand |

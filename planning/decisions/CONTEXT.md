@@ -16,3 +16,7 @@ One dated record per significant decision. Format: `YYYY-MM-DD-decision-title.md
 | 2026-07-06 | Signup trigger auto-creates `mem_accounts` | Standard Supabase pattern; avoids incomplete-profile dead-end | Accepted |
 | 2026-07-06 | Supabase Auth SMTP via Resend | One email vendor; conditional on empowrcic.org domain verification in Resend | Accepted |
 | 2026-07-06 | Stripe excluded from Phase 0 | Nothing in Phase 0 needs payments; account question blocks Phase 1 only | Accepted |
+| 2026-07-06 | Phase plans grouped under `planning/phases/phase-N/` | Keeps the planning workspace index clean; one routing entry covers all phases | Accepted |
+| 2026-07-06 | Account self-service incl. GDPR deletion added to Phase 3 | Child data makes deletion non-optional; caught in phases coverage review | Accepted |
+| 2026-07-06 | Wix customer migration comms added to Phase 4 | Existing customers need an onboarding path before decommission | Accepted |
+| 2026-07-06 | Credits issuable in P1, redeemable from P2 | Cancellation policy needs credits before membership features exist | Accepted |

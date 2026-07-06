@@ -3,8 +3,8 @@
 ## Current Status
 
 - Phase: Planning complete + MWP scaffold created (2026-07-06). Repo live at github.com/Pecuvate/empowr-members (main); parent Empowr CIC .gitignore updated.
-- Complete: plan (planning/spec + planning/architecture), MWP scaffold, seeded ADRs, first commit, GitHub remote + push, github.md registry entry, Phase 0 execution plan (planning/phase-0/)
-- Outstanding: execute Phase 0 per planning/phase-0/CONTEXT.md (brand → schema → auth → Netlify), then Phase 1 MVP build
+- Complete: plan (planning/spec + planning/architecture), MWP scaffold, seeded ADRs, GitHub remote + registry entry, execution plans for ALL phases 0–4 (planning/phases/) with coverage review against the project aim
+- Outstanding: execute Phase 0 per planning/phases/phase-0/CONTEXT.md (brand → schema → auth → Netlify), then phases 1–4 in order
 
 ## Key Decisions
 
