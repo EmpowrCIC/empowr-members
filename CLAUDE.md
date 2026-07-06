@@ -1,0 +1,65 @@
+# Empowr Members
+
+Membership and session booking platform for Empowr CIC — members book, pay for, and manage sessions and monthly memberships. Replaces the legacy Wix booking system.
+
+This file is the map. Workspace detail lives in each CONTEXT.md.
+
+## Routing
+
+| Task | Go to | Read | Skills |
+|---|---|---|---|
+| Feature spec / scope / phases | planning/spec/ | CONTEXT.md | — |
+| Architecture / data model / integrations | planning/architecture/ | CONTEXT.md | — |
+| Decision records (ADRs) | planning/decisions/ | CONTEXT.md | — |
+| UI / components / app code | src/ | CONTEXT.md | /webapp-testing |
+| Deployment / going live | ops/ | CONTEXT.md | /netlify-deploy, /netlify-supabase-check |
+| Brand / favicon setup | ops/ | CONTEXT.md | /init-brand |
+
+## Cross-Workspace Flows
+
+- New feature: planning/spec/ → planning/architecture/ (if schema changes) → src/ → ops/ (if env vars or build config change)
+- Schema change: planning/architecture/ → new migration in src/supabase/migrations/ → update `_config/registry/supabase.md`
+- Go-live: src/ → /pre-deploy-security → /netlify-supabase-check → ops/
+
+## Naming Conventions
+
+- Components: PascalCase (`BookingCard.tsx`)
+- Database tables: `mem_` prefix (shared Supabase project)
+- Migrations: `YYYYMMDDHHMMSS_name.sql` in src/supabase/migrations/
+- Decision records: `YYYY-MM-DD-decision-title.md`
+- Env vars: `NEXT_PUBLIC_` prefix only for browser-safe values
+
+## File Placement
+
+- Application code, config, migrations → src/
+- Specs and scope docs → planning/spec/
+- Design and data-model docs → planning/architecture/
+- ADRs → planning/decisions/
+- Deployment and env documentation → ops/
+
+## Token Management
+
+- Do not load planning/ for routine code changes — only when specing or designing
+- Do not load ops/ unless deploying or changing env/build config
+- Do not read migration history in src/supabase/migrations/ unless writing a new migration
+- Do not embed Empowr CIC identity here — route to the Empowr CIC KB (see CONTEXT.md)
+- Load `_config/registry/supabase.md` only when touching the database; `_config/registry/third-party-services.md` only when touching Stripe/Resend
+
+## Deployment
+
+- Platform: Netlify
+- Domain: members.empowrcic.org
+- Branch: main
+- Base directory: src/
+
+## Skills and Tools
+
+- /netlify-deploy — deploy to Netlify and wire up a custom domain
+- /netlify-supabase-check — audit Netlify + Supabase integration before going live
+- /webapp-testing — test UI in a browser with Playwright
+- /init-brand — set up favicons, manifest, and brand assets
+- /pre-deploy-security — security hygiene check before any deploy
+- /ses-email — wire up transactional email via AWS SES (project default is Resend; see architecture)
+- /esign — e-signature integration (waivers are handled by the existing Empowr Waivers app, not in-project)
+- /audit-mwp — check MWP structure compliance
+- /update-mwp — update MWP files when the project evolves

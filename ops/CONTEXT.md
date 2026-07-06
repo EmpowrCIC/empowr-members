@@ -1,0 +1,43 @@
+# Ops — Deployment & Environment
+
+Netlify deployment configuration for Empowr Members.
+
+## Netlify
+
+| Setting | Value |
+|---|---|
+| Site | Not yet created — run /netlify-deploy in Phase 0 |
+| Domain | members.empowrcic.org (Route53 DNS) |
+| Branch | main |
+| **Base directory** | **src/** — Netlify's file scope starts here; any file a function or build step reads must live inside src/ |
+| Build command | `npm run build` |
+| Publish | `.next` |
+| Plugin | `@netlify/plugin-nextjs` (also in src/package.json devDependencies) |
+| Node | 20 |
+
+Config lives in `netlify.toml` at the **repo root** (never inside src/). git push to main auto-deploys — never fire a manual deploy on top.
+
+Netlify env vars must be set via the API (`POST /accounts/{id}/env?site_id=`) — the MCP env-var tool silently fails; no scopes on free plan; never `envVarIsSecret`.
+
+## Environment Variables
+
+All secrets in `src/.env.local` (never committed). Keep `src/.env.example` in sync.
+
+| Variable | Purpose | Exposure |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | empowr-cic project URL | Browser-safe |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Anon key for RLS-scoped reads | Browser-safe |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service client — all writes; bypasses RLS | Server-only |
+| `STRIPE_SECRET_KEY` | Checkout sessions, refunds, subscriptions | Server-only |
+| `STRIPE_WEBHOOK_SECRET` | Webhook signature verification | Server-only |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe.js | Browser-safe |
+| `RESEND_API_KEY` | Transactional email | Server-only |
+| `ADMIN_EMAILS` | Comma-separated admin allowlist for middleware guard | Server-only |
+
+## Go-Live Sequence
+
+1. /pre-deploy-security (blocking)
+2. /pre-build-check
+3. /netlify-supabase-check
+4. /netlify-deploy (site + domain + env vars)
+5. Update `_config/registry/netlify-sites.md`, `github.md`, `env-vars.md` via /update-registry

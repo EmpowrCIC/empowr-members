@@ -1,0 +1,6 @@
+@import "tailwindcss";
+
+@theme {
+  /* Brand tokens — populated from brand-identity.md via /init-brand */
+  --font-sans: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
+}
