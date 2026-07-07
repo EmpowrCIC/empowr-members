@@ -2,7 +2,7 @@
 
 ## Current Status
 
-- Phase: **Phase 0 COMPLETE** (2026-07-07). Live at https://members.empowrcic.org (Netlify site `76f903e4-3795-406a-9478-34be6b0ed015`, SSL active, HTTPS 200 verified). Schema + signup trigger + auth config live on empowr-cic; 5 env vars set via API; obsolete bookings.empowrcic.org (Wix A record) deleted from Route53. Gotcha fixed: netlify.toml publish must be `src/.next` (resolves from repo root) — templates updated workspace-wide.
+- Phase: **Phase 0 COMPLETE** (2026-07-07). Live at https://members.empowrcic.org (Netlify site `76f903e4-3795-406a-9478-34be6b0ed015`, SSL active). Schema + signup trigger + auth config live on empowr-cic; 5 env vars set via API; obsolete bookings.empowrcic.org (Wix A record) deleted from Route53. **Deploys via GitHub push → CI** (repo linked, verified green in 54s); `publish = ".next"` — CI resolves it relative to base (local `netlify deploy --build` resolves from repo root and misleads; never CLI-deploy).
 - Outstanding for Phase 1 kickoff: spec review gate (5 business rules with Jasmine/Shaun + Stripe account confirmation), e2e signup test (confirms Resend SMTP sender), write src/.env.local for local dev (values via vault pipeline). Leaked-password protection Pro-plan-gated (accepted).
 - Complete: plan (planning/spec + planning/architecture), MWP scaffold, seeded ADRs, GitHub remote + registry entry, execution plans for ALL phases 0–4 (planning/phases/) with coverage review against the project aim
 - Outstanding: execute Phase 0 per planning/phases/phase-0/CONTEXT.md (brand → schema → auth → Netlify), then phases 1–4 in order

@@ -8,7 +8,7 @@
 - supabase.md registry updated (tables, functions, migrations, accepted advisory)
 - Step 4 done — PHASE 0 COMPLETE: Netlify site empowr-members created via API, CLI build+deploy, members.empowrcic.org CNAME live (INSYNC, HTTPS 200), 5 env vars set via API, .netlify/state.json written
 - bookings.empowrcic.org A record (Wix IPs) deleted from Route53 — standalone bookings site superseded by this project (user-directed)
-- Fixed netlify.toml publish ".next" → "src/.next" (publish resolves from repo root, not base) — plugin failed onBuild until corrected; 7 skill template files fixed workspace-wide
+- Publish-path saga: local CLI deploy needed "src/.next" (resolves from repo root) but Netlify CI resolves relative to base → reverted to ".next"; repo linked to Netlify via API (installation 117781637) per deployment policy — push-to-deploy verified green (54s); 7 skill templates corrected with the two-sided rule; CLI deploys are bootstrap-only
 - Next: Phase 1 kickoff — Step 1 spec review gate (5 business rules + Stripe account), e2e signup test, src/.env.local
 
 ## 2026-07-06
