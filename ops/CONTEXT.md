@@ -6,12 +6,12 @@ Netlify deployment configuration for Empowr Members.
 
 | Setting | Value |
 |---|---|
-| Site | Not yet created — run /netlify-deploy in Phase 0 |
-| Domain | members.empowrcic.org (Route53 DNS) |
+| Site | `empowr-members` — ID `76f903e4-3795-406a-9478-34be6b0ed015` (account `pecuvate`) |
+| Domain | members.empowrcic.org — live, Route53 CNAME → empowr-members.netlify.app |
 | Branch | main |
 | **Base directory** | **src/** — Netlify's file scope starts here; any file a function or build step reads must live inside src/ |
 | Build command | `npm run build` |
-| Publish | `.next` |
+| Publish | `src/.next` — publish resolves from the REPO ROOT, not base; bare `.next` fails the Next.js plugin onBuild |
 | Plugin | `@netlify/plugin-nextjs` (also in src/package.json devDependencies) |
 | Node | 20 |
 

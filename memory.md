@@ -2,7 +2,8 @@
 
 ## Current Status
 
-- Phase: Phase 0 in progress (2026-07-07). Steps 1–3 done: brand in + build verified; `mem_` schema + signup trigger live on empowr-cic (advisors clean); auth config applied via supabase-admin CLI (site_url members.empowrcic.org, redirect allow-list incl. localhost, Resend SMTP as "Empowr Members <members@empowrcic.org>"). Leaked-password protection unavailable — Pro-plan-gated (accepted). Step 4 (Netlify + domain) remaining; then test signup e2e to confirm SMTP sender domain.
+- Phase: **Phase 0 COMPLETE** (2026-07-07). Live at https://members.empowrcic.org (Netlify site `76f903e4-3795-406a-9478-34be6b0ed015`, SSL active, HTTPS 200 verified). Schema + signup trigger + auth config live on empowr-cic; 5 env vars set via API; obsolete bookings.empowrcic.org (Wix A record) deleted from Route53. Gotcha fixed: netlify.toml publish must be `src/.next` (resolves from repo root) — templates updated workspace-wide.
+- Outstanding for Phase 1 kickoff: spec review gate (5 business rules with Jasmine/Shaun + Stripe account confirmation), e2e signup test (confirms Resend SMTP sender), write src/.env.local for local dev (values via vault pipeline). Leaked-password protection Pro-plan-gated (accepted).
 - Complete: plan (planning/spec + planning/architecture), MWP scaffold, seeded ADRs, GitHub remote + registry entry, execution plans for ALL phases 0–4 (planning/phases/) with coverage review against the project aim
 - Outstanding: execute Phase 0 per planning/phases/phase-0/CONTEXT.md (brand → schema → auth → Netlify), then phases 1–4 in order
 
