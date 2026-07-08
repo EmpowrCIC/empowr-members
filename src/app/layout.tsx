@@ -5,12 +5,35 @@ import "./globals.css";
 const nunito = Nunito({ subsets: ["latin"], variable: "--font-nunito" });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://members.empowrcic.org"),
   title: "Empowr Members",
   description:
     "Book sessions, manage your membership, and access everything Empowr CIC offers — in one place.",
   manifest: "/site.webmanifest",
   icons: {
+    icon: [
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon.ico" },
+    ],
     apple: "/apple-touch-icon.png",
+  },
+  openGraph: {
+    title: "Empowr Members",
+    description:
+      "Book sessions, manage your membership, and access everything Empowr CIC offers — in one place.",
+    url: "https://members.empowrcic.org",
+    siteName: "Empowr Members",
+    images: [{ url: "/og-image.png", width: 1200, height: 630 }],
+    locale: "en_GB",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Empowr Members",
+    description:
+      "Book sessions, manage your membership, and access everything Empowr CIC offers — in one place.",
+    images: ["/og-image.png"],
   },
 };
 
