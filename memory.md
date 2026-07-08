@@ -11,7 +11,7 @@
 
 - Domain: members.empowrcic.org (dashboard.empowrcic.org reserved for Empowr Dashboard)
 - Database: existing `empowr-cic` Supabase project — waiver tables live there, so the waiver gate is a table join
-- Payments: Stripe Checkout (one-off) + Billing (memberships); account = Heroes' Stripe account **pending confirmation** (open question #4 in spec)
+- Payments: Stripe Checkout (one-off) + Billing (memberships); account = the shared **Empowr CIC Stripe account** (org account, currently only used by Heroes — CONFIRMED 2026-07-08). Members gets its own API keys (`MEMBERS_STRIPE_*`) in that account at Step 5; never reuse or rename Heroes' keys
 - EELA stays discovery-only; this project is the transactional layer
 - All new tables `mem_` prefixed; writes via service client only
 

@@ -8,7 +8,8 @@ One dated record per significant decision. Format: `YYYY-MM-DD-decision-title.md
 | 2026-07-06 | Domain: members.empowrcic.org | dashboard.empowrcic.org reserved for Empowr Dashboard | Accepted |
 | 2026-07-06 | Use existing `empowr-cic` Supabase project, `mem_` table prefix | Waiver tables (`people`, `waiver_responses`) already there — waiver gate becomes a table join, not an integration | Accepted |
 | 2026-07-06 | Supabase Auth over a third-party IdP | Native RLS integration; no new vendor | Accepted |
-| 2026-07-06 | Stripe Checkout + Billing; reuse Heroes' Stripe account | Account already live for Empowr | Proposed — pending Shaun's confirmation (spec open question #4) |
+| 2026-07-06 | Stripe Checkout + Billing; the shared **Empowr CIC Stripe account** (the org's account — currently only used by Heroes, but not Heroes-specific) | Account already live and verified for Empowr; one account, per-app API keys | Accepted 2026-07-08 (user-confirmed) |
+| 2026-07-08 | Per-app Stripe API keys within the shared account — Members gets new keys named `empowr-members` in the Stripe dashboard, stored as `MEMBERS_STRIPE_*` in the vault; Heroes' existing keys stay as-is | Independent rotation/revocation per app; avoids "Heroes" naming confusion without renaming anything | Accepted |
 | 2026-07-06 | EELA stays discovery-only; Members is the transactional layer | Fulfils EELA's planned "Phase 2 members backend" without coupling the two codebases | Accepted |
 | 2026-07-06 | Generic entitlements table (`mem_plan_entitlements`) | Membership entitlements undefined in KB; generic model unblocks Phase 1 while Phase 2 waits on the definition | Accepted |
 | 2026-07-06 | Resend for transactional email (not SES) | Proven in Heroes; one email vendor per org | Accepted |

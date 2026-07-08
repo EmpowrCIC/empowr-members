@@ -96,7 +96,7 @@ MWP scaffold ✅ (2026-07-06) · brand assets (/init-brand) · GitHub repo + par
 |---|---|---|---|
 | 1 | Membership entitlements per plan (sessions/week? family plans? which types?) | Jasmine/Shaun | Phase 2 build |
 | 2 | Wix data export — what customer/booking history is recoverable? | Shaun | Phase 4 (nice-to-have) |
-| 3 | Waiver linking mechanism (email match vs. token handoff with Waivers app) | Dev decision, Phase 1 | Waiver gate |
-| 4 | Confirm Heroes' Stripe account is right for session revenue (vs. separate) | Shaun | Phase 1 payments |
+| 3 | ~~Waiver linking mechanism~~ **RESOLVED 2026-07-08 (provisional):** email+name match at booking, admin manual-link fallback — see ADR | — | — |
+| 4 | ~~Stripe account~~ **RESOLVED 2026-07-08:** the shared **Empowr CIC Stripe account** (currently only used by Heroes — it is the org's account, not a Heroes-specific one). Members gets its own API keys + webhook secret in that account at Step 5 (`MEMBERS_STRIPE_*`); Heroes' keys untouched | — | — |
 | 5 | Child data (DOB + medical notes = sensitive): retention policy + privacy policy update (LegalHub) | Phase 1 go-live | Launch |
 | 6 | Session schedule accuracy — verify with Jasmine before catalogue seeding | Phase 1 seeding | Catalogue accuracy |

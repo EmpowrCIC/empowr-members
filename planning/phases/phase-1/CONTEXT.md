@@ -2,8 +2,8 @@
 
 **Done when:** a member can sign up, add a child, book and pay for any active offering (drop-in, lesson, course, camp, event), receive a confirmation email, and cancel within policy — and an admin can manage the catalogue and view a register per occurrence. Live at members.empowrcic.org, security checks passed.
 
-**Blocked by:** Stripe account decision (spec Q4) — required before Step 5.
-**Requires:** Phase 0 complete.
+**Blocked by:** ~~Stripe account decision (spec Q4)~~ resolved 2026-07-08 — shared Empowr CIC Stripe account; create Members-scoped API keys at Step 5.
+**Requires:** Phase 0 complete. ✅
 
 ---
 
@@ -21,7 +21,7 @@ Resolve the outstanding business rules with Jasmine/Shaun. Each answer lands in 
 
 **Done when:** all five ADR'd; Stripe account confirmed (Q4).
 
-**Status 2026-07-08:** four rules adopted as **provisional MVP defaults** (user-directed) and ADR'd; schedule verification (Q6) stays open and blocks Step 3 seeding only; Stripe account (Q4) awaiting final confirmation and blocks Step 5 only. Steps 2–4 are unblocked. Implementation rule: all five values live as named constants in `src/lib/business-rules.ts` so a confirmed change is a one-line swap.
+**Status 2026-07-08:** four rules adopted as **provisional MVP defaults** (user-directed) and ADR'd; Stripe account CONFIRMED (shared Empowr CIC account, Members-scoped keys at Step 5). Only Q6 (schedule verification with Jasmine) stays open, and it blocks Step 3 *seeding* only. Steps 2–5 are otherwise unblocked. Implementation rule: all five rule values live as named constants in `src/lib/business-rules.ts` so a confirmed change is a one-line swap.
 
 ## Step 2 — Auth + account UI
 
