@@ -2,10 +2,10 @@
 
 ## Current Status
 
-- Phase: **Phase 0 COMPLETE** (2026-07-07). Live at https://members.empowrcic.org (Netlify site `76f903e4-3795-406a-9478-34be6b0ed015`, SSL active). Schema + signup trigger + auth config live on empowr-cic; 5 env vars set via API; obsolete bookings.empowrcic.org (Wix A record) deleted from Route53. **Deploys via GitHub push → CI** (repo linked, verified green in 54s); `publish = ".next"` — CI resolves it relative to base (local `netlify deploy --build` resolves from repo root and misleads; never CLI-deploy).
-- Outstanding for Phase 1 kickoff: spec review gate (5 business rules with Jasmine/Shaun + Stripe account confirmation), e2e signup test (confirms Resend SMTP sender), write src/.env.local for local dev (values via vault pipeline). Leaked-password protection Pro-plan-gated (accepted).
-- Complete: plan (planning/spec + planning/architecture), MWP scaffold, seeded ADRs, GitHub remote + registry entry, execution plans for ALL phases 0–4 (planning/phases/) with coverage review against the project aim
-- Outstanding: execute Phase 0 per planning/phases/phase-0/CONTEXT.md (brand → schema → auth → Netlify), then phases 1–4 in order
+- Phase: **Phase 1 in progress** — technical kickoff done 2026-07-08; **Step 1 spec review gate is the only blocker** (5 business rules with Jasmine/Shaun + Stripe account confirmation, spec Q4). Live at https://members.empowrcic.org (Netlify site `76f903e4-3795-406a-9478-34be6b0ed015`). **Deploys via GitHub push → CI**; `publish = ".next"` — CI resolves it relative to base (never CLI-deploy).
+- 2026-07-08 kickoff session: e2e signup test PASSED end-to-end (signup 200 → Resend SMTP email delivered to inbox in 2s from members@empowrcic.org → confirm link verifies user → mem_accounts trigger fires; test users deleted after). Found + fixed a Phase 0 defect: `mem_` tables had **no table-level grants** (project default ACL is hardened — new tables get no DML for API roles); `members_table_grants` migration applied and verified (service_role full DML, anon catalogue-only, authenticated + own-row tables). src/.env.local written; project registered in the vault pipeline (MEMBERS_* keys seeded; consolidate/pull/sync scripts all carry a members entry). Also fixed sync-to-netlify.ps1 (broken vault read → get_all_secrets RPC).
+- Complete: plan, MWP scaffold, ADRs, GitHub remote + registries, execution plans for phases 0–4, Phase 0 (brand, schema, auth, Netlify + domain)
+- Leaked-password protection Pro-plan-gated (accepted). Gmail note: connected Gmail connector reads the teams@empowrcic.org mailbox, not tech@pecuvate.com — use teams+ plus-addresses for future e2e email checks.
 
 ## Key Decisions
 

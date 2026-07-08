@@ -11,7 +11,7 @@ Netlify deployment configuration for Empowr Members.
 | Branch | main |
 | **Base directory** | **src/** — Netlify's file scope starts here; any file a function or build step reads must live inside src/ |
 | Build command | `npm run build` |
-| Publish | `src/.next` — publish resolves from the REPO ROOT, not base; bare `.next` fails the Next.js plugin onBuild |
+| Publish | `.next` — Netlify CI resolves publish relative to BASE (src/), so bare `.next` is correct; local `netlify deploy --build` resolves from the repo root and misleads — never CLI-deploy |
 | Plugin | `@netlify/plugin-nextjs` (also in src/package.json devDependencies) |
 | Node | 20 |
 
@@ -22,6 +22,8 @@ Netlify env vars must be set via the API (`POST /accounts/{id}/env?site_id=`) �
 ## Environment Variables
 
 All secrets in `src/.env.local` (never committed). Keep `src/.env.example` in sync.
+
+Secrets are on the vault pipeline (registered 2026-07-08): vault keys are `MEMBERS_*` prefixed (`RESEND_API_KEY` is shared/unprefixed). Intake via `F:\Projects\scripts\consolidate-secrets.ps1 -Source members`, local refresh via `pull-to-local.ps1 -Project members`, Netlify push via `sync-to-netlify.ps1 -SiteId 76f903e4-...`. When Stripe keys land (after spec Q4), add them to `.env.local`, re-run consolidate, and extend the site map in `sync-to-netlify.ps1` with `MEMBERS_STRIPE_*` entries.
 
 | Variable | Purpose | Exposure |
 |---|---|---|
