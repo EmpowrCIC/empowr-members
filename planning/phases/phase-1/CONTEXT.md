@@ -9,7 +9,7 @@
 
 ## Step 1 — Spec review gate (no code before this closes)
 
-Resolve the outstanding business rules with Jasmine/Shaun; log each as an ADR:
+Resolve the outstanding business rules with Jasmine/Shaun. Each answer lands in **two places in the same pass**: an ADR row (the decision event, with status) and the Empowr KB `entities/sessions.md` (the living business fact — the KB stays the single source of truth for policy; the ADR only records that/when/why it was decided):
 
 | Rule | Proposed default (confirm or replace) |
 |---|---|
