@@ -20,3 +20,9 @@ One dated record per significant decision. Format: `YYYY-MM-DD-decision-title.md
 | 2026-07-06 | Account self-service incl. GDPR deletion added to Phase 3 | Child data makes deletion non-optional; caught in phases coverage review | Accepted |
 | 2026-07-06 | Wix customer migration comms added to Phase 4 | Existing customers need an onboarding path before decommission | Accepted |
 | 2026-07-06 | Credits issuable in P1, redeemable from P2 | Cancellation policy needs credits before membership features exist | Accepted |
+| 2026-07-08 | Credit expiry: 12 months from issue | Spec-gate default adopted for MVP; user-directed 2026-07-08 | Provisional — Jasmine/Shaun may revise before launch |
+| 2026-07-08 | <48h refund exceptions: admin-only override flag on a booking, no member-facing promise | Keeps discretion without creating an entitlement | Provisional — Jasmine/Shaun may revise before launch |
+| 2026-07-08 | Walk-ins not system-captured in P1 (door payments outside the system until P3) | Avoids building POS flows before the core booking loop works | Provisional — Jasmine/Shaun may revise before launch |
+| 2026-07-08 | Waiver linking: match `mem_participants` → `people` by normalised email + name at booking; unmatched → prompt to complete waiver; admin manual link fallback | Spec Q3 default; keeps the gate soft-fail | Provisional — Jasmine/Shaun may revise before launch |
+| 2026-07-08 | All five business-rule values implemented as named constants in one config module (`src/lib/business-rules.ts`) | Rules are provisional — a confirmed change must be a one-line swap, not a refactor | Accepted |
+| 2026-07-08 | Session timetable: verify with Jasmine before seeding (P1 Step 3) | KB timetable may lag reality; seeding wrong times creates real-world no-shows | Open — blocks Step 3 seeding only |

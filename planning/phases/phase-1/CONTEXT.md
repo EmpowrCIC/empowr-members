@@ -21,6 +21,8 @@ Resolve the outstanding business rules with Jasmine/Shaun. Each answer lands in 
 
 **Done when:** all five ADR'd; Stripe account confirmed (Q4).
 
+**Status 2026-07-08:** four rules adopted as **provisional MVP defaults** (user-directed) and ADR'd; schedule verification (Q6) stays open and blocks Step 3 seeding only; Stripe account (Q4) awaiting final confirmation and blocks Step 5 only. Steps 2–4 are unblocked. Implementation rule: all five values live as named constants in `src/lib/business-rules.ts` so a confirmed change is a one-line swap.
+
 ## Step 2 — Auth + account UI
 
 Sign up / sign in (magic link + password), auth middleware (session guard per `_config/guides/auth-middleware.md`), account page, household management (add/edit participants, DOB, emergency contact, medical notes).
