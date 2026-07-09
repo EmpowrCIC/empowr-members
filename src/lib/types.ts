@@ -12,6 +12,31 @@ export type Account = {
   updated_at: string;
 };
 
+export type BookingStatus =
+  | "pending_payment"
+  | "confirmed"
+  | "cancelled"
+  | "credited"
+  | "refunded"
+  | "attended"
+  | "no_show";
+
+export type Booking = {
+  id: string;
+  account_id: string;
+  participant_id: string;
+  occurrence_id: string | null;
+  course_run_id: string | null;
+  status: BookingStatus;
+  price_paid_pence: number | null;
+  source: "online" | "walk_in" | "member";
+  stripe_payment_intent_id: string | null;
+  expires_at: string | null;
+  cancelled_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Participant = {
   id: string;
   account_id: string;

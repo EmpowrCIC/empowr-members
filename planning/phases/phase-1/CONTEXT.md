@@ -42,6 +42,8 @@ Offering list + detail pages, occurrence calendar, venue display, kit-list displ
 Occurrence (or course-run) selection → participant selection (age-validated) → waiver gate → duplicate/capacity check → `pending_payment` booking insert. pg_cron expiry job (30 min) releasing stale pendings — the job deferred from Phase 0 lands here.
 **Done when:** two concurrent bookings can't oversell an occurrence; expired pendings release.
 
+**Status 2026-07-09: DONE** — e2e 15/15 (UI 10 + DB 5, incl. a true concurrent race on a capacity-1 occurrence and the live pg_cron sweep). `mem_hold_bookings()` RPC (row-locked, service-role only), waiver gate live against the Waivers tables (active form version, `skater_names` name match, `person_id` persisted on match), `/book/[occurrenceId]` + `/book/run/[runId]` pages end at a "space held" panel — Step 5 replaces it with the Stripe redirect. Done-when met.
+
 ## Step 5 — Payments (Stripe)
 
 Checkout session per booking (multi-participant = one session, line item each); `checkout.session.completed` webhook → confirm booking; signature verification; idempotent webhook handling. Walk-in/early-bird prices honoured by offering fields. Env vars into Netlify.

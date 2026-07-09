@@ -1,0 +1,92 @@
+import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
+import type { Metadata } from "next";
+import { ArrowLeft, CalendarDays, MapPin } from "lucide-react";
+import { getAuthedAccount } from "@/lib/auth";
+import {
+  getBookableOccurrence,
+  listBookingParticipants,
+} from "@/lib/booking";
+import { formatAgeRange, formatOccurrence, formatPrice } from "@/lib/format";
+import { BookingForm } from "@/components/booking/BookingForm";
+import { PolicyNotice } from "@/components/catalogue/PolicyNotice";
+
+export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = { title: "Book a session — Empowr Members" };
+
+export default async function BookOccurrencePage({
+  params,
+}: {
+  params: Promise<{ occurrenceId: string }>;
+}) {
+  const { occurrenceId } = await params;
+  const authed = await getAuthedAccount();
+  if (!authed) redirect(`/login?next=/book/${occurrenceId}`);
+
+  const occurrence = await getBookableOccurrence(occurrenceId);
+  if (!occurrence) notFound();
+  const offering = occurrence.offering;
+  const venue = occurrence.venue ?? offering.venue;
+
+  const participants = await listBookingParticipants(
+    { id: authed.account.id, email: authed.user.email ?? "" },
+    offering,
+    new Date(occurrence.starts_at)
+  );
+
+  return (
+    <main className="mx-auto max-w-2xl px-6 py-10">
+      <Link
+        href={`/sessions/${offering.slug}`}
+        className="flex w-fit items-center gap-1.5 text-sm font-bold text-mid transition-colors hover:text-blue"
+      >
+        <ArrowLeft className="h-4 w-4" aria-hidden /> {offering.title}
+      </Link>
+
+      <h1 className="mt-5 text-3xl font-black tracking-tight text-black">
+        Book: {offering.title}
+      </h1>
+
+      <div className="mt-4 space-y-1.5 rounded-2xl bg-card p-5 shadow-sm">
+        <p className="flex items-center gap-2 font-bold text-black">
+          <CalendarDays className="h-4 w-4 text-blue" aria-hidden />
+          {formatOccurrence(occurrence.starts_at, occurrence.ends_at)}
+        </p>
+        {venue && (
+          <p className="flex items-center gap-2 text-sm font-semibold text-mid">
+            <MapPin className="h-4 w-4 text-blue" aria-hidden />
+            {[venue.name, venue.address, venue.postcode]
+              .filter(Boolean)
+              .join(", ")}
+          </p>
+        )}
+        <p className="text-sm font-semibold text-mid">
+          {formatPrice(offering.price_pence)} per place ·{" "}
+          {formatAgeRange(offering.age_min, offering.age_max)}
+        </p>
+      </div>
+
+      <section className="mt-6 rounded-2xl bg-card p-6 shadow-sm sm:p-8">
+        <h2 className="text-xl font-extrabold text-black">
+          Who&apos;s coming?
+        </h2>
+        <div className="mt-4">
+          <BookingForm
+            target={{ occurrence_id: occurrence.id }}
+            participants={participants}
+            pricePence={offering.price_pence}
+            ageLabel={formatAgeRange(
+              offering.age_min,
+              offering.age_max
+            ).toLowerCase()}
+          />
+        </div>
+      </section>
+
+      <div className="mt-6">
+        <PolicyNotice refundPolicy={offering.refund_policy} />
+      </div>
+    </main>
+  );
+}

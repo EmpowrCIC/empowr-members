@@ -53,8 +53,23 @@ export const magicLinkSchema = z.object({
   email: z.string().trim().email("Enter a valid email address"),
 });
 
+export const bookingSchema = z
+  .object({
+    occurrence_id: z.string().uuid().optional(),
+    course_run_id: z.string().uuid().optional(),
+    participant_ids: z
+      .array(z.string().uuid())
+      .min(1, "Choose at least one participant")
+      .max(10, "Too many participants in one booking"),
+  })
+  .refine(
+    (d) => (d.occurrence_id === undefined) !== (d.course_run_id === undefined),
+    "Choose a session date or a course to book"
+  );
+
 export type ProfileInput = z.infer<typeof profileSchema>;
 export type ParticipantInput = z.infer<typeof participantSchema>;
 export type SignupInput = z.infer<typeof signupSchema>;
 export type PasswordLoginInput = z.infer<typeof passwordLoginSchema>;
 export type MagicLinkInput = z.infer<typeof magicLinkSchema>;
+export type BookingInput = z.infer<typeof bookingSchema>;

@@ -1,5 +1,17 @@
 # DEVLOG — Empowr Members
 
+## 2026-07-09 (Phase 1 Step 4 — booking flow) ✅
+
+- Migration `20260709150000_members_booking_flow`: `mem_hold_bookings()` RPC (plpgsql, service-role EXECUTE only) — `FOR UPDATE` lock on the occurrence/course-run row, inline release of expired holds on that target, capacity = occurrence → venue default (null = unlimited; run uses `run.capacity`), price = `run.price_pence ?? offering.price_pence`, multi-participant insert in one transaction, unique-violation → `mem_duplicate_booking`; partial index on pending `expires_at`; pg_cron `members-release-expired-pendings` (every minute, expired pendings → `cancelled` — enum has no `expired`); registry + ADRs updated (3 new rows)
+- Waiver gate (`lib/waivers.ts`, read-only on Waivers tables): signer = `people` by account email (ilike), participant covered when an active-form-version response lists their normalised name in `skater_names` (or signer books themselves); linked `person_id` trusted (admin manual link path); fresh matches persisted to `mem_participants.person_id` by the API; fails closed (no active version → unsigned)
+- `POST /api/bookings`: zod (`bookingSchema` XOR occurrence/run) → participant ownership → age eligibility **on the session start date** (422 + names) → waiver gate (409 `waiver_required` + names, no insert) → RPC (409 capacity / duplicate / not-bookable mapped to friendly messages) → 201 with holds + `expires_at`
+- Pages `(member)/book/[occurrenceId]` + `(member)/book/run/[runId]` + `BookingForm` client component: summary card, checkbox participant select (ineligible disabled with age range, unsigned badged "waiver needed"), live total, waiver notice with waiver.empowrcic.org link + retry, "Space held" panel (Step 5 swaps this for the Stripe redirect)
+- **e2e 15/15 PASSED** — Playwright UI 10/10 (guard redirect, render, ineligible disabled, waiver badge, waiver 409 with link, hold, duplicate, B fills capacity-1, A rejected, course-run hold at run price) + DB 5/5 (person_id persisted; **true concurrent race on capacity-1 → exactly one wins**; foreign-participant rejected; inline expired-hold release; live cron sweep <90s). Seeded via service scripts incl. test rows in `people`/`waiver_responses` (only way to e2e the gate) — all cleaned + verified after
+- Gotcha: service_role has no DELETE grant on `people`/`waiver_responses` (Waivers-app tables) — e2e cleanup of those rows must go via SQL (postgres), not the service client
+- Gotcha (again): zombie `next dev` on port 3000 from a prior session — killed before e2e; check first
+- Waiver-table check constraints: `skating_mode in (self|others|party)`, `session_policy_type in (none|rollerdisco|sk8skool)` — relevant for any future seeded waiver rows
+- Next: **Step 5 — Stripe payments** (user creates `MEMBERS_STRIPE_*` keys in the shared Empowr CIC Stripe dashboard first; then Checkout session per booking, webhook confirm, env vars to Netlify). Step 3 seeding still waits on Q6 (Jasmine)
+
 ## 2026-07-09 (Phase 1 Step 3 — catalogue pages; seeding still gated on Q6)
 
 - Migration `20260709100000_members_offering_kit_list` applied (mem_offerings.kit_list text — schema had no kit-list field but Step 3 display + Step 6 emails need it); registry updated
