@@ -9,7 +9,10 @@
 - e2e signup test PASSED: signup 200 → mem_accounts trigger row created same second → Resend SMTP confirmation from members@empowrcic.org delivered to inbox in 2s (not spam) → verify link sets email_confirmed_at → 303 back to members.empowrcic.org. Test users cleaned up
 - Gmail connector reads teams@empowrcic.org (not tech@pecuvate.com) — teams+ plus-addresses are the checkable e2e recipients
 - ops/CONTEXT.md corrected (publish `.next` two-sided rule; vault pipeline section added); supabase.md registry updated (grants migration + default-ACL warning)
-- Next: Step 1 spec review gate (5 business rules + Stripe account) — the only blocker before Step 2 code
+- **Spec gate closed** (user-directed): 4 business rules adopted as provisional MVP defaults — ADR'd + landed in Empowr KB entities/sessions.md; all rule values to live as constants in `src/lib/business-rules.ts` (one-line swap when Jasmine/Shaun confirm)
+- **Stripe resolved (Q4)**: it's the shared *Empowr CIC* Stripe account (org account — never "Heroes' account"); Members gets its own API keys (`MEMBERS_STRIPE_*`, created in dashboard at Step 5), Heroes' keys untouched; third-party-services registry rewritten to match
+- Only remaining gate item: Q6 timetable verification with Jasmine — blocks Step 3 *seeding* only
+- Next session: **Step 2 — auth + account UI** (signup/signin magic link + password, middleware per auth-middleware.md Pattern 1, account page, household management); deps to install per architecture (supabase ssr, zod, react-hook-form, date-fns); Stripe platform infra (webhook endpoint, products/prices) comes at Step 5, user creates the API key in dashboard then
 
 ## 2026-07-06 (Phase 0 execution)
 
