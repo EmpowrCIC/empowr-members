@@ -35,6 +35,8 @@ Sign up / sign in (magic link + password), auth middleware (session guard per `_
 Offering list + detail pages, occurrence calendar, venue display, kit-list display. Seed offerings/occurrences/venues from KB sessions data *after* Step 1 schedule verification. Public browse (anon) works logged out.
 **Done when:** every current session type from the KB is browsable with correct prices, venues, age ranges.
 
+**Status 2026-07-09: pages DONE** (e2e 25/25 with KB-shaped test data, cleaned after) — /sessions with type/age filters + /sessions/[slug] with prices, venue (+ occurrence override), kit list (new `kit_list` column), policy notice, book CTAs into Step 4 routes. **Seeding still open** — waits on Q6; day filter deferred to seeding.
+
 ## Step 4 — Booking flow
 
 Occurrence (or course-run) selection → participant selection (age-validated) → waiver gate → duplicate/capacity check → `pending_payment` booking insert. pg_cron expiry job (30 min) releasing stale pendings — the job deferred from Phase 0 lands here.

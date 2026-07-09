@@ -1,5 +1,16 @@
 # DEVLOG — Empowr Members
 
+## 2026-07-09 (Phase 1 Step 3 — catalogue pages; seeding still gated on Q6)
+
+- Migration `20260709100000_members_offering_kit_list` applied (mem_offerings.kit_list text — schema had no kit-list field but Step 3 display + Step 6 emails need it); registry updated
+- lib/catalogue.ts (anon-safe RLS reads: listOfferings with type/age filters via PostgREST `.or` null-bounds logic, getOffering, listUpcomingOccurrences, listCourseRuns) + lib/format.ts (formatPrice pence→£, formatOccurrence in Europe/London via date-fns-tz, formatAgeRange)
+- Pages: /sessions (type pills + age filter via searchParams, force-dynamic) and /sessions/[slug] (prices incl. early-bird/door, venue card + per-occurrence venue override, kit list, PolicyNotice from CANCELLATION_CUTOFF_HOURS, per_occurrence date list with Book → /book/[id], per_run course-run cards with Book → /book/run/[id]); PublicHeader layout scoped to sessions/; Sessions link added to MemberHeader
+- Day filter deferred until real data (needs occurrence-join UX); home CTA still points at EELA until seeding lands
+- **e2e 25/25 PASSED** against KB-shaped seed data (inactive hidden, filters, past occurrences hidden, venue override, course runs, non-refundable notice, guarded book links, 404): seeded via SQL, cleaned after — prod catalogue empty ("timetable being finalised" state) until Q6
+- Gotcha: a stale `next dev` on port 3000 (zombie from a prior session) made with_server test against dead code — two timeouts before killing PID; check port 3000 before e2e runs
+- Gotcha: CTE `delete ... returning` + same-statement count reads show pre-delete snapshot — verify cleanup with a separate query
+- Next: **Step 4 — booking flow** (occurrence/run selection → participant selection age-validated → waiver gate → capacity/duplicate check → pending_payment insert + pg_cron expiry); seeding real timetable = quick follow-up once Jasmine confirms Q6
+
 ## 2026-07-09 (Phase 1 Step 2 — auth + account UI) ✅
 
 - Deps installed: @supabase/supabase-js, @supabase/ssr, zod, react-hook-form, @hookform/resolvers, date-fns(+tz), framer-motion, server-only. **shadcn deliberately deferred** — Step 2 UI built with small brand-token primitives (`components/ui/form.tsx`); revisit shadcn at Step 3+ when dialog/table/calendar are genuinely needed (init would churn globals.css)

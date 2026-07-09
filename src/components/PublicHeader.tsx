@@ -1,8 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
-import { SignOutButton } from "@/components/auth/SignOutButton";
 
-export function MemberHeader() {
+export function PublicHeader() {
   return (
     <header className="border-b border-line bg-warm-white">
       <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-4">
@@ -23,9 +22,8 @@ export function MemberHeader() {
             Sessions
           </Link>
           <Link href="/account" className="transition-colors hover:text-blue">
-            Account
+            My account
           </Link>
-          <SignOutButton />
         </nav>
       </div>
     </header>
