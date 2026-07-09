@@ -28,6 +28,8 @@ Resolve the outstanding business rules with Jasmine/Shaun. Each answer lands in 
 Sign up / sign in (magic link + password), auth middleware (session guard per `_config/guides/auth-middleware.md`), account page, household management (add/edit participants, DOB, emergency contact, medical notes).
 **Done when:** a parent account holds two child participants; age eligibility derives from DOB.
 
+**Status 2026-07-09: DONE** — e2e 18/18 (guards, login, profile save, two children with derived ages, edit, persistence, 401 on unauthenticated write). Notes: magic link is also the password-recovery path (no reset flow); shadcn deferred in favour of brand-token form primitives.
+
 ## Step 3 — Catalogue + seeding
 
 Offering list + detail pages, occurrence calendar, venue display, kit-list display. Seed offerings/occurrences/venues from KB sessions data *after* Step 1 schedule verification. Public browse (anon) works logged out.

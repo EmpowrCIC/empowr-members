@@ -1,0 +1,173 @@
+"use client";
+
+import { useState } from "react";
+import { format, parseISO } from "date-fns";
+import { Pencil, Plus, Trash2, UserRound } from "lucide-react";
+import { ageOn } from "@/lib/age";
+import type { Participant } from "@/lib/types";
+import type { ParticipantInput } from "@/lib/validation";
+import { Button, FormNotice } from "@/components/ui/form";
+import { ParticipantForm } from "@/components/account/ParticipantForm";
+
+export function HouseholdManager({
+  initialParticipants,
+}: {
+  initialParticipants: Participant[];
+}) {
+  const [participants, setParticipants] = useState(initialParticipants);
+  const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function create(values: ParticipantInput) {
+    const res = await fetch("/api/participants", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(values),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error ?? "Could not add the participant.");
+    setParticipants((list) => [...list, body.participant as Participant]);
+    setAdding(false);
+  }
+
+  async function update(id: string, values: ParticipantInput) {
+    const res = await fetch(`/api/participants/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(values),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error ?? "Could not save the participant.");
+    setParticipants((list) =>
+      list.map((p) => (p.id === id ? (body.participant as Participant) : p))
+    );
+    setEditingId(null);
+  }
+
+  async function remove(participant: Participant) {
+    setError(null);
+    if (
+      !window.confirm(
+        `Remove ${participant.name} from your household? This can't be undone.`
+      )
+    ) {
+      return;
+    }
+    const res = await fetch(`/api/participants/${participant.id}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setError(body.error ?? "Could not remove the participant.");
+      return;
+    }
+    setParticipants((list) => list.filter((p) => p.id !== participant.id));
+  }
+
+  return (
+    <div className="space-y-4">
+      {error && <FormNotice tone="error">{error}</FormNotice>}
+
+      {participants.length === 0 && !adding && (
+        <p className="rounded-xl bg-blue-pale px-4 py-3 text-sm font-semibold text-blue-dark">
+          No one in your household yet — add your first participant to get
+          ready for booking.
+        </p>
+      )}
+
+      <ul className="space-y-3">
+        {participants.map((participant) =>
+          editingId === participant.id ? (
+            <li
+              key={participant.id}
+              className="rounded-xl border border-line p-4"
+            >
+              <ParticipantForm
+                initial={participant}
+                submitLabel="Save changes"
+                onSubmit={(values) => update(participant.id, values)}
+                onCancel={() => setEditingId(null)}
+              />
+            </li>
+          ) : (
+            <li
+              key={participant.id}
+              className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-line p-4"
+            >
+              <div className="flex items-start gap-3">
+                <span className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-full bg-blue-pale">
+                  <UserRound className="h-4.5 w-4.5 text-blue" aria-hidden />
+                </span>
+                <div>
+                  <p className="font-extrabold text-black">
+                    {participant.name}
+                    <span className="ml-2 rounded-full bg-blue-soft px-2.5 py-0.5 text-xs font-bold text-blue-dark">
+                      age {ageOn(participant.dob)}
+                    </span>
+                  </p>
+                  <p className="mt-0.5 text-sm text-mid">
+                    Born {format(parseISO(participant.dob), "d MMMM yyyy")}
+                    {participant.emergency_contact_name && (
+                      <>
+                        {" · "}Emergency: {participant.emergency_contact_name}
+                        {participant.emergency_contact_phone &&
+                          ` (${participant.emergency_contact_phone})`}
+                      </>
+                    )}
+                  </p>
+                  {participant.medical_notes && (
+                    <p className="mt-1 text-sm text-muted">
+                      Medical: {participant.medical_notes}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAdding(false);
+                    setEditingId(participant.id);
+                  }}
+                  className="flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-bold text-mid transition-colors hover:bg-blue-pale hover:text-blue"
+                >
+                  <Pencil className="h-3.5 w-3.5" aria-hidden /> Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => remove(participant)}
+                  className="flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-bold text-mid transition-colors hover:bg-red-soft hover:text-red-dark"
+                >
+                  <Trash2 className="h-3.5 w-3.5" aria-hidden /> Remove
+                </button>
+              </div>
+            </li>
+          )
+        )}
+      </ul>
+
+      {adding ? (
+        <div className="rounded-xl border border-line p-4">
+          <ParticipantForm
+            submitLabel="Add participant"
+            onSubmit={create}
+            onCancel={() => setAdding(false)}
+          />
+        </div>
+      ) : (
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => {
+            setEditingId(null);
+            setAdding(true);
+          }}
+          className="flex items-center gap-1.5"
+        >
+          <Plus className="h-4 w-4" aria-hidden /> Add a participant
+        </Button>
+      )}
+    </div>
+  );
+}

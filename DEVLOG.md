@@ -1,5 +1,17 @@
 # DEVLOG — Empowr Members
 
+## 2026-07-09 (Phase 1 Step 2 — auth + account UI) ✅
+
+- Deps installed: @supabase/supabase-js, @supabase/ssr, zod, react-hook-form, @hookform/resolvers, date-fns(+tz), framer-motion, server-only. **shadcn deliberately deferred** — Step 2 UI built with small brand-token primitives (`components/ui/form.tsx`); revisit shadcn at Step 3+ when dialog/table/calendar are genuinely needed (init would churn globals.css)
+- lib layer: supabase clients (client/server/service per src/CONTEXT.md), `business-rules.ts` (all 5 provisional rule values + PENDING_BOOKING_EXPIRY_MINUTES + TIMEZONE as named constants), `age.ts` (ageOn/isAgeEligible/isPlausibleDob), `validation.ts` (zod schemas shared by forms AND API routes), `types.ts`, `auth.ts` (getAuthedAccount)
+- `middleware.ts` — Pattern 1 session guard on /account /bookings /book /membership /admin with ?next= return; auth pages redirect signed-in users to /account; api/ excluded from matcher (routes do their own 401s)
+- `/auth/callback` handles both ?code= (PKCE) and ?token_hash&type (email confirm); open-redirect-safe next param
+- App restructured into route groups per architecture: home → `(public)/`, + `(public)/login` (password | magic-link tabs; magic link `shouldCreateUser: false` so typos don't create ghost accounts), `(public)/signup` (name→user_metadata→trigger), `(member)/account` under layout with header + sign-out. No password-reset flow — magic link covers recovery for MVP
+- Writes per data-access rules: PATCH /api/account, POST /api/participants, PATCH+DELETE /api/participants/[id] — all service-client, zod-parsed, scoped to caller's account id; participant DELETE maps FK 23503 → friendly 409 (booking history)
+- **e2e 18/18 PASSED** (Playwright vs dev server, admin-created confirmed user): guard redirects, password login, profile save, two child participants added (ages 8/11 derived from DOB), future-DOB rejected, edit persists, reload persists (RLS read path), sign-out re-guards, unauthenticated API write → 401. **Step 2 done-when met.** Test user + temp helper deleted after
+- `npm run build` clean; pushed to main → Netlify CI deploy
+- Next: **Step 3 — catalogue + seeding** (blocked on Q6 timetable verification with Jasmine for the *seeding* half; catalogue pages can build against schema meanwhile)
+
 ## 2026-07-08 (Phase 1 technical kickoff)
 
 - src/.env.local written from the live Netlify site's env vars (silent pull via API); Stripe keys left blank pending spec Q4
