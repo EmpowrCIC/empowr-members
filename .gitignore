@@ -12,6 +12,7 @@ src/out/
 src/.env
 src/.env.local
 src/.env.*.local
+src/.env*.bak
 
 # Netlify
 .netlify/
