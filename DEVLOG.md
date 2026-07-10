@@ -1,5 +1,17 @@
 # DEVLOG — Empowr Members
 
+## 2026-07-10 (Phase 1 Step 5 — Stripe payments) ✅
+
+- Migration `20260710090000_members_stripe_checkout`: `mem_bookings.stripe_checkout_session_id` + partial index — the webhook confirms/releases every booking in a session by this id
+- `POST /api/bookings` extended: after the hold, creates a **card-only** Checkout session (`mode: payment`, one line item per participant at the RPC's snapshotted `price_paid_pence`), creates+persists a Stripe customer per account on first pay (`mem_accounts.stripe_customer_id`, reused by Phase 2 Billing), links the session id onto the holds and **extends their `expires_at` past the session's own 31-min expiry by a 10-min grace** so a last-second payment still beats the pg_cron sweep. Session-creation failure releases the holds inline. Returns `{ checkout_url }`; `BookingForm` redirects via `window.location.assign`
+- New webhook route `POST /api/webhooks/stripe`: async signature verify (`constructEventAsync`), idempotent. `checkout.session.completed` (paid only) → holds `pending_payment` → `confirmed`, payment-intent persisted, `expires_at` cleared; **paid-for-already-released holds logged loudly** for manual refund until Step 7 tooling. `checkout.session.expired` → release unpaid holds. Bad/missing signature → 400 (Stripe retries only on 500)
+- New `/book/confirmation` page (success_url target): RLS read of own bookings by session id, `AutoRefresh` client polls ~20s while the webhook lands, then shows Booking confirmed / Confirming / not-completed. "Space held" panel removed from `BookingForm`
+- **e2e via real test-mode hosted Checkout (Playwright + signed webhook delivery): 5/5 UI + 22/22 DB/webhook.** Test A multi-child occurrence (2×£7 → confirmed, both price 700, PI set, session linked), Test B course run (£35 = run price, not offering price). Negatives: completed-replay is a no-op (idempotent), `expired` releases a hold, bad + missing signature both 400. Stripe customer persisted (`cus_`). Seed/test/cleanup scripts in a temp `e2e-tmp/` (deleted after; waiver `people`/`waiver_responses` rows cleaned via SQL per the no-DELETE-grant gotcha)
+- **Env/webhook wiring:** prod Stripe webhook endpoint `we_1TraTSCpJGJ55gu5LdKiZb3e` created (TEST mode) → `https://members.empowrcic.org/api/webhooks/stripe`; its signing secret intook to `.env.shared` → vault `MEMBERS_STRIPE_WEBHOOK_SECRET`; `sync-to-netlify.ps1` `$siteVarMap` gained the two Stripe rows; `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET` pushed to the Netlify site (per-key, because a 5-var-already-present bulk POST 422s). `.env.local` `STRIPE_WEBHOOK_SECRET` holds a LOCAL self-signed secret, NOT the prod one
+- Gotcha: **Stripe CLI login key expired** — `stripe listen` 401s; the `rk_test` restricted key also can't run `listen` (no Debugging Tools Write scope). Worked around by self-signing webhook events locally with `generateTestHeaderString`. Re-run `stripe login` next time CLI forwarding is wanted
+- Gotcha: Checkout defaulted to card + Klarna + Revolut/Link; forced `payment_method_types: ["card"]` because the webhook treats payment as synchronous (async methods would confirm holds late)
+- Next: **Step 6 — Resend emails** (booking confirmation with venue/time/kit list/policy, cancellation/credit notices, Empowr-cancels notice). Step 3 real-timetable seeding still gated on Q6 (Jasmine)
+
 ## 2026-07-09 (Step 5 prep — Stripe test keys vaulted)
 
 - User created the Members restricted key in the shared Empowr CIC Stripe dashboard (test mode; Checkout Sessions / Customers / Payment Intents / Charges: Write — Charges covers refunds; Stripe has no separate Refunds scope, and Write implies Read)
@@ -31,17 +43,7 @@
 - Gotcha: CTE `delete ... returning` + same-statement count reads show pre-delete snapshot — verify cleanup with a separate query
 - Next: **Step 4 — booking flow** (occurrence/run selection → participant selection age-validated → waiver gate → capacity/duplicate check → pending_payment insert + pg_cron expiry); seeding real timetable = quick follow-up once Jasmine confirms Q6
 
-## 2026-07-09 (Phase 1 Step 2 — auth + account UI) ✅
-
-- Deps installed: @supabase/supabase-js, @supabase/ssr, zod, react-hook-form, @hookform/resolvers, date-fns(+tz), framer-motion, server-only. **shadcn deliberately deferred** — Step 2 UI built with small brand-token primitives (`components/ui/form.tsx`); revisit shadcn at Step 3+ when dialog/table/calendar are genuinely needed (init would churn globals.css)
-- lib layer: supabase clients (client/server/service per src/CONTEXT.md), `business-rules.ts` (all 5 provisional rule values + PENDING_BOOKING_EXPIRY_MINUTES + TIMEZONE as named constants), `age.ts` (ageOn/isAgeEligible/isPlausibleDob), `validation.ts` (zod schemas shared by forms AND API routes), `types.ts`, `auth.ts` (getAuthedAccount)
-- `middleware.ts` — Pattern 1 session guard on /account /bookings /book /membership /admin with ?next= return; auth pages redirect signed-in users to /account; api/ excluded from matcher (routes do their own 401s)
-- `/auth/callback` handles both ?code= (PKCE) and ?token_hash&type (email confirm); open-redirect-safe next param
-- App restructured into route groups per architecture: home → `(public)/`, + `(public)/login` (password | magic-link tabs; magic link `shouldCreateUser: false` so typos don't create ghost accounts), `(public)/signup` (name→user_metadata→trigger), `(member)/account` under layout with header + sign-out. No password-reset flow — magic link covers recovery for MVP
-- Writes per data-access rules: PATCH /api/account, POST /api/participants, PATCH+DELETE /api/participants/[id] — all service-client, zod-parsed, scoped to caller's account id; participant DELETE maps FK 23503 → friendly 409 (booking history)
-- **e2e 18/18 PASSED** (Playwright vs dev server, admin-created confirmed user): guard redirects, password login, profile save, two child participants added (ages 8/11 derived from DOB), future-DOB rejected, edit persists, reload persists (RLS read path), sign-out re-guards, unauthenticated API write → 401. **Step 2 done-when met.** Test user + temp helper deleted after
-- `npm run build` clean; pushed to main → Netlify CI deploy
-- Next: **Step 3 — catalogue + seeding** (blocked on Q6 timetable verification with Jasmine for the *seeding* half; catalogue pages can build against schema meanwhile)
+## 2026-07-09 (Phase 1 Step 2 — auth + account UI) ✅ — magic-link+password auth, Pattern 1 middleware guard, lib layer (supabase clients, business-rules constants, zod validation), route groups, household CRUD via service-client API routes; e2e 18/18; shadcn deferred for brand-token primitives
 
 ## 2026-07-08 — Phase 1 kickoff: spec gate closed (4 provisional rules ADR'd, Stripe = shared Empowr CIC account confirmed), e2e signup PASSED, fixed missing mem_ table grants (hardened default ACL), vault pipeline onboarded, .env.local written; only Q6 left open
 

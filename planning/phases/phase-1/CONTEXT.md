@@ -49,6 +49,8 @@ Occurrence (or course-run) selection → participant selection (age-validated) �
 Checkout session per booking (multi-participant = one session, line item each); `checkout.session.completed` webhook → confirm booking; signature verification; idempotent webhook handling. Walk-in/early-bird prices honoured by offering fields. Env vars into Netlify.
 **Done when:** test-mode end-to-end booking confirms via webhook, including a course run and a multi-child booking.
 
+**Status 2026-07-10: DONE** — e2e 5/5 UI + 22/22 DB/webhook against real test-mode hosted Checkout. Card-only Checkout after the hold, session id linked to bookings + holds extended past session expiry by a 10-min grace; webhook (async-verified, idempotent) confirms on `completed` and releases on `expired`; `/book/confirmation` auto-refreshes while the webhook lands. Stripe customer persisted per account. Prod webhook endpoint `we_1TraTSCpJGJ55gu5LdKiZb3e` + Netlify `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` live (TEST mode; `_LIVE` twins at Step 9). Done-when met.
+
 ## Step 6 — Emails (Resend)
 
 Booking confirmation (venue, time, kit list, cancellation policy, waiver status), cancellation/refund/credit notices, Empowr-cancels-occurrence notice.
