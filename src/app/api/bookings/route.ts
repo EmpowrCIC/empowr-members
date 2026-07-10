@@ -1,8 +1,12 @@
 // POST /api/bookings — hold pending_payment bookings for the signed-in
-// member. Gates in order: participant ownership → age eligibility →
-// waiver (fail closed, no insert) → atomic capacity/duplicate check via
-// mem_hold_bookings() (row-locked, so concurrent bookings can't
-// oversell). Payment (Step 5) confirms the hold before it expires.
+// member, then hand off to Stripe Checkout. Gates in order: participant
+// ownership → age eligibility → waiver (fail closed, no insert) → atomic
+// capacity/duplicate check via mem_hold_bookings() (row-locked, so
+// concurrent bookings can't oversell) → Checkout session (one per
+// booking, a line item per participant). The webhook confirms the hold;
+// holds outlive the Checkout session by HOLD_GRACE_MINUTES so a
+// last-second payment always beats the pg_cron sweep. If session
+// creation fails, the holds are released immediately.
 import { NextResponse } from "next/server";
 import { getAuthedAccount } from "@/lib/auth";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -10,12 +14,34 @@ import { bookingSchema } from "@/lib/validation";
 import { checkWaivers } from "@/lib/waivers";
 import { isAgeEligible } from "@/lib/age";
 import { PENDING_BOOKING_EXPIRY_MINUTES } from "@/lib/business-rules";
+import { getStripe, HOLD_GRACE_MINUTES } from "@/lib/stripe";
+import { formatOccurrence, formatDate } from "@/lib/format";
 import type { Booking, Participant } from "@/lib/types";
 
 type TargetRow = {
   starts: string | null;
-  offering: { age_min: number | null; age_max: number | null };
+  ends: string | null;
+  label: string | null;
+  offering: {
+    title: string;
+    age_min: number | null;
+    age_max: number | null;
+  };
 };
+
+/** Origin for Stripe redirect URLs — proxy-aware (Netlify), http for
+ *  local dev hosts. */
+function requestOrigin(request: Request): string {
+  const host =
+    request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  if (!host) return new URL(request.url).origin;
+  const proto =
+    request.headers.get("x-forwarded-proto") ??
+    (host.startsWith("localhost") || host.startsWith("127.")
+      ? "http"
+      : "https");
+  return `${proto}://${host}`;
+}
 
 export async function POST(request: Request) {
   const authed = await getAuthedAccount();
@@ -59,22 +85,27 @@ export async function POST(request: Request) {
   }
 
   // Authoritative target read (service client — RLS-independent) for the
-  // age check; bookability itself is re-checked inside the RPC.
+  // age check and Checkout line items; bookability itself is re-checked
+  // inside the RPC.
   let target: TargetRow | null = null;
   if (occurrence_id) {
     const { data } = await service
       .from("mem_occurrences")
-      .select("starts:starts_at, offering:mem_offerings(age_min, age_max)")
+      .select(
+        "starts:starts_at, ends:ends_at, offering:mem_offerings(title, age_min, age_max)"
+      )
       .eq("id", occurrence_id)
       .maybeSingle();
-    target = data as unknown as TargetRow | null;
+    target = data ? ({ label: null, ...data } as unknown as TargetRow) : null;
   } else if (course_run_id) {
     const { data } = await service
       .from("mem_course_runs")
-      .select("starts:starts_on, offering:mem_offerings(age_min, age_max)")
+      .select(
+        "starts:starts_on, label, offering:mem_offerings(title, age_min, age_max)"
+      )
       .eq("id", course_run_id)
       .maybeSingle();
-    target = data as unknown as TargetRow | null;
+    target = data ? ({ ends: null, ...data } as unknown as TargetRow) : null;
   }
   if (!target) {
     return NextResponse.json(
@@ -172,8 +203,97 @@ export async function POST(request: Request) {
   }
 
   const held = (bookings ?? []) as Booking[];
-  return NextResponse.json(
-    { bookings: held, expires_at: held[0]?.expires_at ?? null },
-    { status: 201 }
-  );
+  const heldIds = held.map((b) => b.id);
+  const participantName = new Map(participants.map((p) => [p.id, p.name]));
+  const when =
+    occurrence_id && target.starts && target.ends
+      ? formatOccurrence(target.starts, target.ends)
+      : target.label ??
+        (target.starts ? `starts ${formatDate(target.starts)}` : "");
+  const origin = requestOrigin(request);
+  const cancelPath = occurrence_id
+    ? `/book/${occurrence_id}`
+    : `/book/run/${course_run_id}`;
+
+  try {
+    const stripe = getStripe();
+
+    // One Stripe customer per account — created on first payment, reused
+    // for every later Checkout (and Billing subscriptions in Phase 2).
+    let customerId = authed.account.stripe_customer_id;
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: authed.user.email ?? undefined,
+        name: authed.account.name,
+        metadata: { mem_account_id: authed.account.id },
+      });
+      customerId = customer.id;
+      await service
+        .from("mem_accounts")
+        .update({ stripe_customer_id: customerId })
+        .eq("id", authed.account.id);
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      // Card only — the webhook treats payment as synchronous; async
+      // methods (Klarna etc.) would confirm holds late or not at all.
+      payment_method_types: ["card"],
+      customer: customerId,
+      client_reference_id: authed.account.id,
+      line_items: held.map((b) => ({
+        quantity: 1,
+        price_data: {
+          currency: "gbp",
+          unit_amount: b.price_paid_pence ?? 0,
+          product_data: {
+            name: target!.offering.title,
+            description: [participantName.get(b.participant_id), when]
+              .filter(Boolean)
+              .join(" — "),
+          },
+        },
+      })),
+      metadata: { booking_ids: heldIds.join(","), account_id: authed.account.id },
+      payment_intent_data: {
+        metadata: { booking_ids: heldIds.join(","), account_id: authed.account.id },
+      },
+      // Stripe's floor is 30 min from creation; 31 clears clock skew.
+      expires_at: Math.floor(Date.now() / 1000) + 31 * 60,
+      success_url: `${origin}/book/confirmation?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}${cancelPath}`,
+    });
+
+    if (!session.url) throw new Error("Checkout session has no url");
+
+    // Tie the holds to the session and extend them past its expiry.
+    const graceExpiry = new Date(
+      ((session.expires_at ?? Math.floor(Date.now() / 1000) + 31 * 60) +
+        HOLD_GRACE_MINUTES * 60) *
+        1000
+    ).toISOString();
+    const { error: linkError } = await service
+      .from("mem_bookings")
+      .update({ stripe_checkout_session_id: session.id, expires_at: graceExpiry })
+      .in("id", heldIds);
+    if (linkError) throw linkError;
+
+    return NextResponse.json(
+      { checkout_url: session.url, bookings: held },
+      { status: 201 }
+    );
+  } catch (error) {
+    console.error("checkout session creation failed", error);
+    // Release the holds — don't strand capacity behind a payment that
+    // can never complete.
+    await service
+      .from("mem_bookings")
+      .update({ status: "cancelled", cancelled_at: new Date().toISOString() })
+      .in("id", heldIds)
+      .eq("status", "pending_payment");
+    return NextResponse.json(
+      { error: "Could not start the payment — please try again." },
+      { status: 500 }
+    );
+  }
 }

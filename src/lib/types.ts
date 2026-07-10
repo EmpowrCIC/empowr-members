@@ -31,6 +31,7 @@ export type Booking = {
   price_paid_pence: number | null;
   source: "online" | "walk_in" | "member";
   stripe_payment_intent_id: string | null;
+  stripe_checkout_session_id: string | null;
   expires_at: string | null;
   cancelled_at: string | null;
   created_at: string;

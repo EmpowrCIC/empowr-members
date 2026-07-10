@@ -3,13 +3,13 @@
 // Participant selection + hold submission. Age eligibility is computed
 // server-side (page) and re-enforced by the API; the waiver gate lives
 // in the API — a stale "signed" state here just means a 409 with a
-// waiver link. Step 5 replaces the held panel with a Stripe redirect.
+// waiver link. A 201 means the hold succeeded and carries the Stripe
+// Checkout URL — the redirect is the final step; the webhook confirms.
 import { useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, ExternalLink } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import { Button, FormNotice } from "@/components/ui/form";
 import { formatPrice } from "@/lib/format";
-import { PENDING_BOOKING_EXPIRY_MINUTES } from "@/lib/business-rules";
 import { links } from "@/lib/links";
 
 export type BookingFormParticipant = {
@@ -37,7 +37,7 @@ export function BookingForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [unsigned, setUnsigned] = useState<UnsignedParticipant[]>([]);
-  const [held, setHeld] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -60,8 +60,10 @@ export function BookingForm({
       });
       const body = await response.json().catch(() => ({}));
 
-      if (response.status === 201) {
-        setHeld(true);
+      if (response.status === 201 && typeof body.checkout_url === "string") {
+        // Keep the button disabled while the browser navigates away.
+        setRedirecting(true);
+        window.location.assign(body.checkout_url);
         return;
       }
       if (body.error === "waiver_required") {
@@ -88,29 +90,6 @@ export function BookingForm({
     } finally {
       setSubmitting(false);
     }
-  }
-
-  if (held) {
-    return (
-      <div className="rounded-2xl bg-blue-pale p-6 text-center">
-        <CheckCircle2 className="mx-auto h-10 w-10 text-blue" aria-hidden />
-        <h2 className="mt-3 text-xl font-extrabold text-blue-dark">
-          Space held
-        </h2>
-        <p className="mx-auto mt-2 max-w-md text-sm font-semibold text-blue-dark">
-          Your booking is reserved for the next{" "}
-          {PENDING_BOOKING_EXPIRY_MINUTES} minutes. Online payment is the
-          final step and launches very soon — we&apos;ll email you as soon as
-          it&apos;s ready to complete.
-        </p>
-        <Link
-          href="/sessions"
-          className="mt-4 inline-block rounded-full bg-blue px-6 py-2.5 font-extrabold text-white shadow-blue transition-colors hover:bg-blue-dark"
-        >
-          Back to sessions
-        </Link>
-      </div>
-    );
   }
 
   if (participants.length === 0) {
@@ -140,7 +119,7 @@ export function BookingForm({
                 type="checkbox"
                 className="h-5 w-5 accent-[var(--color-blue)]"
                 checked={selected.has(participant.id)}
-                disabled={!participant.eligible || submitting}
+                disabled={!participant.eligible || submitting || redirecting}
                 onChange={() => toggle(participant.id)}
               />
               <span className="flex-1">
@@ -193,9 +172,13 @@ export function BookingForm({
         </p>
         <Button
           onClick={submit}
-          disabled={selected.size === 0 || submitting}
+          disabled={selected.size === 0 || submitting || redirecting}
         >
-          {submitting ? "Holding your space…" : "Book now"}
+          {redirecting
+            ? "Taking you to payment…"
+            : submitting
+              ? "Holding your space…"
+              : "Book and pay"}
         </Button>
       </div>
     </div>
