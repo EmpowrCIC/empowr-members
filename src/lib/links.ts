@@ -7,3 +7,15 @@ export const links = {
   hafBookings: "https://app.holidayactivities.com/parent/providers/empowr-cic",
   contactEmail: "general@empowrcic.org",
 } as const;
+
+// This app's own public base. Emails and other absolute-URL contexts use
+// it; prefer NEXT_PUBLIC_SITE_URL when set (e.g. deploy previews) and fall
+// back to production.
+export const MEMBERS_BASE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ??
+  "https://members.empowrcic.org";
+
+/** Absolute URL for a path on this site, for use in emails. */
+export function membersUrl(path = ""): string {
+  return `${MEMBERS_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
+}

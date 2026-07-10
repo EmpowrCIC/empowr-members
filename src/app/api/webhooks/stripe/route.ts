@@ -8,6 +8,7 @@ import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { getStripe } from "@/lib/stripe";
 import { createServiceClient } from "@/lib/supabase/service";
+import { sendBookingConfirmationForSession } from "@/lib/notifications";
 
 export async function POST(request: Request) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -64,7 +65,13 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Retry" }, { status: 500 });
       }
 
-      if (!confirmed?.length) {
+      if (confirmed?.length) {
+        // First-time confirmation (replays return no rows) — send the
+        // booking-confirmation email. Failure is logged inside and must
+        // NOT fail the webhook, or Stripe would retry an already-paid,
+        // already-confirmed session.
+        await sendBookingConfirmationForSession(service, session.id);
+      } else {
         // Replay (already confirmed) is fine; paid-for-released-holds is
         // not — surface it loudly for a manual refund until Step 7 tooling.
         const { data: rows } = await service

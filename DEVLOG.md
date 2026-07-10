@@ -1,5 +1,18 @@
 # DEVLOG — Empowr Members
 
+## 2026-07-10 (Phase 1 Step 6 — Emails via Resend) ✅
+
+- `resend` (v6) installed; `RESEND_API_KEY` already in `.env.local`; sender `Empowr CIC <members@empowrcic.org>` (the Resend-verified address Supabase auth SMTP already uses), reply-to `general@empowrcic.org`
+- `lib/email.ts`: Resend client singleton + `sendEmail()` that **never throws** (logs + returns bool — the webhook must still 2xx or Stripe retries a paid session), plus brand-inlined email primitives (`emailLayout` shell w/ preheader, `panel`, `detailRow`, `ctaButton`, `esc`). Palette hardcoded from globals.css (email clients strip CSS vars)
+- `lib/emails/*` — three **pure** builders (take typed plain objects, return `{subject, html}`, no DB deps → snapshot-testable): `booking-confirmation` (offering, time, venue+address, kit list, participants, amount paid, 48h/non-refundable policy line, waiver-on-file note + waiver.empowrcic.org link), `booking-cancellation` (refund vs credit variant + credit expiry date), `occurrence-cancelled` (Empowr-cancels; refund/credit + optional reason clause). Shared shapes in `lib/emails/types.ts`
+- `lib/notifications.ts` — orchestrators mapping DB rows → template data + resolving recipient via account→`auth.admin.getUserById`: `sendBookingConfirmationForSession` (one email per Checkout session, folds a multi-child booking; venue = occurrence override ?? offering venue; course-run "when" adds date range), plus thin `sendBookingCancellationEmail`/`sendOccurrenceCancelledEmail` for Steps 7/8 to call
+- **Wired the confirmation email into the Stripe webhook** — fires only on first-time confirm (`confirmed?.length`), awaited but failure-swallowed so it can't 500 the webhook. Cancellation + Empowr-cancels are built + tested but not wired (their triggers land in Steps 7/8)
+- Added `MEMBERS_BASE_URL` + `membersUrl()` to `lib/links.ts` (prefers `NEXT_PUBLIC_SITE_URL`, falls back to members.empowrcic.org) so emails don't hardcode the domain
+- **e2e via a temp routable API harness (real dev server): all 3 emails delivered to `teams+memberstest@empowrcic.org` and confirmed in the inbox via the Gmail connector**, from members@empowrcic.org with correct subjects/snippets. The confirmation ran the **real orchestrator** against a seeded confirmed 2-child booking (venue/date/kit/£14 all read from DB — "Fri 17 Jul, 5pm–6pm"). Seed→send→cleanup all in the route; **DB verified zero leftover rows** after (offerings/venues/participants/bookings/test-user all 0). Rendered HTML also dumped to scratchpad and content-checked. Temp route deleted, stale `.next/types` cleared, `tsc --noEmit` clean
+- Gotcha: a Next App Router folder starting with `_` (`app/api/_devtest/`) is a **private, non-routable** folder → 404; renamed to route it. Also killed the recurring zombie `next dev` on 3000 before testing (again)
+- Copy: multi-child confirmation now reads "everyone's all set" (not the awkward "your children'll")
+- Next: **Step 7 — My Bookings + self-serve cancellation** (upcoming/past, ≥48h refund-or-credit choice, <48h blocked, non-refundable always blocked, Stripe refund API + `mem_credits` issue) — will call the cancellation orchestrator built here. Step 3 real-timetable **seeding** still gated on Q6 (Jasmine)
+
 ## 2026-07-10 (Phase 1 Step 5 — Stripe payments) ✅
 
 - Migration `20260710090000_members_stripe_checkout`: `mem_bookings.stripe_checkout_session_id` + partial index — the webhook confirms/releases every booking in a session by this id
