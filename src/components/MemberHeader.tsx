@@ -22,6 +22,9 @@ export function MemberHeader() {
           <Link href="/sessions" className="transition-colors hover:text-blue">
             Sessions
           </Link>
+          <Link href="/bookings" className="transition-colors hover:text-blue">
+            Bookings
+          </Link>
           <Link href="/account" className="transition-colors hover:text-blue">
             Account
           </Link>

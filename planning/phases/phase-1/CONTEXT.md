@@ -61,6 +61,9 @@ Booking confirmation (venue, time, kit list, cancellation policy, waiver status)
 Upcoming/past bookings; self-serve cancellation enforcing: ≥48h → refund or credit (member chooses); <48h → blocked with policy message; non-refundable offerings → always blocked. Stripe refund API + `mem_credits` issue.
 **Done when:** all four policy paths behave per spec table.
 
+**Status 2026-07-11: DONE** — `/bookings` page (upcoming/past, RLS-scoped) with inline cancel; `lib/cancellation.ts` pure policy helper shared by the page (render-time estimate) and `POST /api/bookings/[id]/cancel` (authoritative). Route claims the status flip atomically first (`confirmed` → `refunded`/`credited`, guarded by `.eq("status","confirmed")`) then calls Stripe (partial refund on the shared session PaymentIntent) or inserts `mem_credits`; rolls the claim back to `confirmed` on failure. Reuses the Step 6 cancellation email. e2e 6/6 (non-refundable always-blocked, <48h blocked, ≥48h credit issued + emailed, ≥48h refund via a real test-mode Stripe PaymentIntent + emailed, double-cancel 409, no-auth 401) — DB and Stripe state verified directly, both cancellation emails confirmed via Gmail. All seeded rows cleaned, zero leftovers.
+**Next: Step 8 — Admin area.**
+
 ## Step 8 — Admin area
 
 Allowlist-gated (`ADMIN_EMAILS` middleware). CRUD: offerings, occurrences, course runs, venues. Register view per occurrence. Cancel-occurrence flow → notify + refund/credit every booking.
