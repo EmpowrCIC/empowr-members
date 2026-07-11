@@ -1,0 +1,42 @@
+// POST /api/admin/offerings — create an offering.
+import { NextResponse } from "next/server";
+import { getAuthedAdmin } from "@/lib/admin";
+import { createServiceClient } from "@/lib/supabase/service";
+import { offeringSchema } from "@/lib/validation";
+
+export async function POST(request: Request) {
+  const admin = await getAuthedAdmin();
+  if (!admin) {
+    return NextResponse.json({ error: "Not authorised" }, { status: 401 });
+  }
+
+  const parsed = offeringSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.issues[0]?.message ?? "Invalid input" },
+      { status: 400 }
+    );
+  }
+
+  const service = createServiceClient();
+  const { data, error } = await service
+    .from("mem_offerings")
+    .insert(parsed.data)
+    .select()
+    .single();
+  if (error) {
+    if (error.code === "23505") {
+      return NextResponse.json(
+        { error: "That URL slug is already in use." },
+        { status: 409 }
+      );
+    }
+    console.error("admin offering create failed", error);
+    return NextResponse.json(
+      { error: "Could not create the offering — please try again." },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({ offering: data }, { status: 201 });
+}
