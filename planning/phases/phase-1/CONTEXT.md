@@ -78,6 +78,8 @@ Allowlist-gated (`ADMIN_EMAILS` middleware). CRUD: offerings, occurrences, cours
 
 /webapp-testing e2e pass (signup → book child → cancel ≥48h → credit issued); /pre-deploy-security; /netlify-supabase-check; privacy policy live via LegalHub (spec Q5 — launch gate); switch Stripe to live mode; deploy; update registries; memory/DEVLOG; compress this file.
 
+**Status 2026-07-12: in progress.** e2e pass (signup→book→cancel→credit) 6/6 PASS, zero app bugs. `/pre-deploy-security` 0 FAILs. `/netlify-supabase-check` clean after removing an unused `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` stub. Remaining, deferred by user request: privacy policy via LegalHub, Stripe live-mode switch (to be done together, not unattended), deploy, registries.
+
 ---
 
 ## Decisions in this plan
