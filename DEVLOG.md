@@ -49,36 +49,11 @@
 - Gotcha: Checkout defaulted to card + Klarna + Revolut/Link; forced `payment_method_types: ["card"]` because the webhook treats payment as synchronous (async methods would confirm holds late)
 - Next: **Step 6 — Resend emails** (booking confirmation with venue/time/kit list/policy, cancellation/credit notices, Empowr-cancels notice). Step 3 real-timetable seeding still gated on Q6 (Jasmine)
 
-## 2026-07-09 (Step 5 prep — Stripe test keys vaulted)
+## 2026-07-09 — Stripe test keys vaulted (Step 5 prep): MEMBERS_STRIPE_* keys created in the shared Empowr CIC dashboard, intook to vault, pulled to local; live keys deferred to Step 9 go-live
 
-- User created the Members restricted key in the shared Empowr CIC Stripe dashboard (test mode; Checkout Sessions / Customers / Payment Intents / Charges: Write — Charges covers refunds; Stripe has no separate Refunds scope, and Write implies Read)
-- Keys vaulted via .env.shared intake → consolidate-secrets.ps1 (`MEMBERS_STRIPE_SECRET_KEY` rk_test, `MEMBERS_STRIPE_PUBLISHABLE_KEY` pk_test); pull-to-local populated src/.env.local (`STRIPE_SECRET_KEY`/`STRIPE_PUBLISHABLE_KEY`, prefix-verified); deduped a leftover blank STRIPE_SECRET_KEY line from the kickoff session
-- Decision (in memory.md): vault keeps TEST values under unsuffixed names for local dev; at Step 9 go-live add `_LIVE` vault entries and point sync-to-netlify.ps1 `$siteVarMap` at them — app code reads unsuffixed env vars everywhere; webhook secret gets the same twin treatment
-- Netlify sync deliberately deferred — push MEMBERS_STRIPE_* to the site as part of Step 5 when code reads them
-- Next: **Step 5 build** — Stripe Checkout session per booking, `checkout.session.completed` webhook confirms holds before expiry, signature verification + idempotency; webhook signing secret created during the build
+## 2026-07-09 — Phase 1 Step 4 DONE: booking flow (`mem_hold_bookings()` row-locked RPC, waiver gate against the Waivers tables, pg_cron expiry sweep); e2e 15/15 incl. a true concurrent capacity-1 race
 
-## 2026-07-09 (Phase 1 Step 4 — booking flow) ✅
-
-- Migration `20260709150000_members_booking_flow`: `mem_hold_bookings()` RPC (plpgsql, service-role EXECUTE only) — `FOR UPDATE` lock on the occurrence/course-run row, inline release of expired holds on that target, capacity = occurrence → venue default (null = unlimited; run uses `run.capacity`), price = `run.price_pence ?? offering.price_pence`, multi-participant insert in one transaction, unique-violation → `mem_duplicate_booking`; partial index on pending `expires_at`; pg_cron `members-release-expired-pendings` (every minute, expired pendings → `cancelled` — enum has no `expired`); registry + ADRs updated (3 new rows)
-- Waiver gate (`lib/waivers.ts`, read-only on Waivers tables): signer = `people` by account email (ilike), participant covered when an active-form-version response lists their normalised name in `skater_names` (or signer books themselves); linked `person_id` trusted (admin manual link path); fresh matches persisted to `mem_participants.person_id` by the API; fails closed (no active version → unsigned)
-- `POST /api/bookings`: zod (`bookingSchema` XOR occurrence/run) → participant ownership → age eligibility **on the session start date** (422 + names) → waiver gate (409 `waiver_required` + names, no insert) → RPC (409 capacity / duplicate / not-bookable mapped to friendly messages) → 201 with holds + `expires_at`
-- Pages `(member)/book/[occurrenceId]` + `(member)/book/run/[runId]` + `BookingForm` client component: summary card, checkbox participant select (ineligible disabled with age range, unsigned badged "waiver needed"), live total, waiver notice with waiver.empowrcic.org link + retry, "Space held" panel (Step 5 swaps this for the Stripe redirect)
-- **e2e 15/15 PASSED** — Playwright UI 10/10 (guard redirect, render, ineligible disabled, waiver badge, waiver 409 with link, hold, duplicate, B fills capacity-1, A rejected, course-run hold at run price) + DB 5/5 (person_id persisted; **true concurrent race on capacity-1 → exactly one wins**; foreign-participant rejected; inline expired-hold release; live cron sweep <90s). Seeded via service scripts incl. test rows in `people`/`waiver_responses` (only way to e2e the gate) — all cleaned + verified after
-- Gotcha: service_role has no DELETE grant on `people`/`waiver_responses` (Waivers-app tables) — e2e cleanup of those rows must go via SQL (postgres), not the service client
-- Gotcha (again): zombie `next dev` on port 3000 from a prior session — killed before e2e; check first
-- Waiver-table check constraints: `skating_mode in (self|others|party)`, `session_policy_type in (none|rollerdisco|sk8skool)` — relevant for any future seeded waiver rows
-- Next: **Step 5 — Stripe payments** (user creates `MEMBERS_STRIPE_*` keys in the shared Empowr CIC Stripe dashboard first; then Checkout session per booking, webhook confirm, env vars to Netlify). Step 3 seeding still waits on Q6 (Jasmine)
-
-## 2026-07-09 (Phase 1 Step 3 — catalogue pages; seeding still gated on Q6)
-
-- Migration `20260709100000_members_offering_kit_list` applied (mem_offerings.kit_list text — schema had no kit-list field but Step 3 display + Step 6 emails need it); registry updated
-- lib/catalogue.ts (anon-safe RLS reads: listOfferings with type/age filters via PostgREST `.or` null-bounds logic, getOffering, listUpcomingOccurrences, listCourseRuns) + lib/format.ts (formatPrice pence→£, formatOccurrence in Europe/London via date-fns-tz, formatAgeRange)
-- Pages: /sessions (type pills + age filter via searchParams, force-dynamic) and /sessions/[slug] (prices incl. early-bird/door, venue card + per-occurrence venue override, kit list, PolicyNotice from CANCELLATION_CUTOFF_HOURS, per_occurrence date list with Book → /book/[id], per_run course-run cards with Book → /book/run/[id]); PublicHeader layout scoped to sessions/; Sessions link added to MemberHeader
-- Day filter deferred until real data (needs occurrence-join UX); home CTA still points at EELA until seeding lands
-- **e2e 25/25 PASSED** against KB-shaped seed data (inactive hidden, filters, past occurrences hidden, venue override, course runs, non-refundable notice, guarded book links, 404): seeded via SQL, cleaned after — prod catalogue empty ("timetable being finalised" state) until Q6
-- Gotcha: a stale `next dev` on port 3000 (zombie from a prior session) made with_server test against dead code — two timeouts before killing PID; check port 3000 before e2e runs
-- Gotcha: CTE `delete ... returning` + same-statement count reads show pre-delete snapshot — verify cleanup with a separate query
-- Next: **Step 4 — booking flow** (occurrence/run selection → participant selection age-validated → waiver gate → capacity/duplicate check → pending_payment insert + pg_cron expiry); seeding real timetable = quick follow-up once Jasmine confirms Q6
+## 2026-07-09 — Phase 1 Step 3 pages DONE: catalogue `/sessions` + `/sessions/[slug]`; e2e 25/25 against KB-shaped seed data; real-timetable seeding still gated on Q6 (Jasmine)
 
 ## 2026-07-09 (Phase 1 Step 2 — auth + account UI) ✅ — magic-link+password auth, Pattern 1 middleware guard, lib layer (supabase clients, business-rules constants, zod validation), route groups, household CRUD via service-client API routes; e2e 18/18; shadcn deferred for brand-token primitives
 
