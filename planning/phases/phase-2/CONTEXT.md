@@ -9,7 +9,7 @@
 
 ## Step 1 — Entitlement definition gate (no code before this closes)
 
-Confirm with Jasmine/Shaun and ADR each: which plans exist (£30 general / £50 Roller Disco / others?), which offering types each covers, session caps per period (or unlimited), family coverage (one plan → all household participants, or per participant?), and whether member booking still requires advance booking (recommended: yes — capacity still counts).
+Confirm with Jasmine/Shaun and ADR each: which plans exist (£30 general / £50 Roller Disco / others?), which offering types each covers, session caps per period (or unlimited), family coverage (one plan → all household participants, or per participant?), and whether member booking still requires advance booking (recommended: yes — capacity still counts). Take-into-the-conversation question list with options: [planning/phases/phase-2/entitlement-intake.md](./entitlement-intake.md).
 **Done when:** `mem_membership_plans` + `mem_plan_entitlements` rows can be written directly from the ADRs.
 
 ## Step 2 — Stripe Billing setup
