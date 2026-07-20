@@ -1,19 +1,17 @@
-// My Bookings — upcoming/past, with self-serve cancellation. Read is
-// RLS-scoped (own rows only); the cancellation policy shown here is a
-// render-time estimate — the API route re-checks it authoritatively at
-// the moment of cancellation.
+// My Bookings — upcoming/past. Read is RLS-scoped (own rows only). There
+// is no self-serve cancellation; confirmed upcoming bookings show a
+// contact notice instead (see BookingsList).
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthedAccount } from "@/lib/auth";
 import { formatOccurrence, formatDate } from "@/lib/format";
-import { evaluateCancellationPolicy } from "@/lib/cancellation";
 import { BookingsList, type BookingView } from "@/components/bookings/BookingsList";
 
 export const metadata: Metadata = { title: "Your bookings — Empowr Members" };
 export const dynamic = "force-dynamic";
 
-type OfferingJoin = { title: string; refund_policy: "standard" | "non_refundable" };
+type OfferingJoin = { title: string };
 
 type BookingRow = {
   id: string;
@@ -57,8 +55,8 @@ export default async function BookingsPage() {
     .select(
       `id, status, price_paid_pence, created_at,
        participant:mem_participants(name),
-       occurrence:mem_occurrences(starts_at, ends_at, offering:mem_offerings(title, refund_policy)),
-       course_run:mem_course_runs(label, starts_on, ends_on, offering:mem_offerings(title, refund_policy))`
+       occurrence:mem_occurrences(starts_at, ends_at, offering:mem_offerings(title)),
+       course_run:mem_course_runs(label, starts_on, ends_on, offering:mem_offerings(title))`
     )
     .order("created_at", { ascending: false });
 
@@ -77,11 +75,6 @@ export default async function BookingsPage() {
           ? courseRunWhen(row.course_run)
           : "";
 
-      const cancellation =
-        row.status === "confirmed"
-          ? evaluateCancellationPolicy(offering.refund_policy, startsAt)
-          : null;
-
       return {
         id: row.id,
         status: row.status as BookingView["status"],
@@ -90,7 +83,6 @@ export default async function BookingsPage() {
         participantName: row.participant?.name ?? "",
         pricePaidPence: row.price_paid_pence,
         startsAtMs: new Date(startsAt).getTime(),
-        cancellation,
       };
     })
     .filter((b): b is BookingView => b !== null);
@@ -108,9 +100,7 @@ export default async function BookingsPage() {
         <h1 className="text-3xl font-black tracking-tight text-black">
           Your bookings
         </h1>
-        <p className="mt-1 text-mid">
-          Sessions you&apos;ve booked, and self-serve cancellation.
-        </p>
+        <p className="mt-1 text-mid">Sessions you&apos;ve booked.</p>
       </div>
 
       <BookingsList upcoming={upcoming} past={past} />

@@ -4,14 +4,10 @@
 // is a one-line swap. Do not inline any of these values in components
 // or API routes.
 
-/** Credits expire this many months after issue. */
+/** Credits expire this many months after issue. Only issued via the
+ *  Empowr-initiated occurrence-cancel flow (admin picks refund or
+ *  credit) — members have no self-serve path to a credit. */
 export const CREDIT_EXPIRY_MONTHS = 12;
-
-/** Self-serve cancellation cutoff — at or beyond this many hours before
- *  the occurrence start, the member chooses refund or credit; inside it,
- *  cancellation is blocked (admin-only override flag, no member-facing
- *  promise). */
-export const CANCELLATION_CUTOFF_HOURS = 48;
 
 /** Walk-ins are not system-captured in Phase 1 — door payments stay
  *  outside the system until Phase 3. */

@@ -13,8 +13,7 @@ import {
 } from "@/lib/email";
 import { formatPrice, formatDate } from "@/lib/format";
 import { membersUrl } from "@/lib/links";
-import type { BookingEmailSummary, BuiltEmail } from "./types";
-import type { CancellationOutcome } from "./booking-cancellation";
+import type { BookingEmailSummary, BuiltEmail, CancellationOutcome } from "./types";
 
 export type OccurrenceCancelledEmailData = Pick<
   BookingEmailSummary,

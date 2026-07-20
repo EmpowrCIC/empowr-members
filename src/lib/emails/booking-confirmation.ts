@@ -11,7 +11,6 @@ import {
 } from "@/lib/email";
 import { formatPrice } from "@/lib/format";
 import { links, membersUrl } from "@/lib/links";
-import { CANCELLATION_CUTOFF_HOURS } from "@/lib/business-rules";
 import type { BookingEmailSummary, BuiltEmail, EmailVenue } from "./types";
 
 /** Venue block: name, address, postcode — omitted lines when null. */
@@ -25,9 +24,9 @@ export function venueLines(venue: EmailVenue | null): string {
 
 function cancellationPolicyLine(refundPolicy: "standard" | "non_refundable"): string {
   if (refundPolicy === "non_refundable") {
-    return `This session is <strong>non-refundable</strong> — spaces can't be cancelled for a refund or credit once booked.`;
+    return `This session is <strong>non-refundable</strong> — spaces can't be cancelled or transferred once booked, regardless of notice given.`;
   }
-  return `Need to cancel? You can cancel for a refund or account credit up to <strong>${CANCELLATION_CUTOFF_HOURS} hours</strong> before the session from your account. Inside ${CANCELLATION_CUTOFF_HOURS} hours we can't refund the space.`;
+  return `Bookings are final — cancellations, transfers, and refunds aren't offered by default once confirmed. Need to discuss your circumstances? Email <strong>enquiries@empowrcic.org</strong>; exceptions are considered at our discretion.`;
 }
 
 export function buildBookingConfirmationEmail(

@@ -1,12 +1,13 @@
 // POST /api/admin/occurrences/[id]/cancel — Empowr cancels a session.
-// Unlike the member self-serve cancel route, this ignores the offering's
-// refund_policy and the 48h cutoff entirely — those exist to restrict
-// member-initiated cancellations, not Empowr's. The admin picks ONE
-// outcome (refund or credit) applied to every confirmed booking on the
-// occurrence; unpaid pending_payment holds are just released. Bookings
-// that already settled (cancelled/credited/refunded/attended/no_show)
-// are left alone. Confirmed bookings for the same account are folded
-// into one notice email, mirroring the booking-confirmation email.
+// Members have no self-serve cancellation path (bookings are final by
+// default); this route is the only way a refund or credit gets issued,
+// and it's always an explicit, human, per-occurrence admin decision — the
+// discretionary exception the Terms & Conditions describe. The admin
+// picks ONE outcome (refund or credit) applied to every confirmed booking
+// on the occurrence; unpaid pending_payment holds are just released.
+// Bookings that already settled (cancelled/credited/refunded/attended/
+// no_show) are left alone. Confirmed bookings for the same account are
+// folded into one notice email, mirroring the booking-confirmation email.
 import { NextResponse } from "next/server";
 import { getAuthedAdmin } from "@/lib/admin";
 import { createServiceClient } from "@/lib/supabase/service";

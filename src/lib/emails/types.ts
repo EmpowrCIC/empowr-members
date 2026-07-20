@@ -25,3 +25,10 @@ export type BookingEmailSummary = {
 };
 
 export type BuiltEmail = { subject: string; html: string };
+
+/** The remedy Empowr chose for an occurrence cancellation — refund or
+ *  credit. Members have no self-serve path to either; this is always an
+ *  admin decision (see occurrence-cancelled.ts). */
+export type CancellationOutcome =
+  | { kind: "refund"; amountPence: number }
+  | { kind: "credit"; amountPence: number; expiresOn: string }; // ISO date

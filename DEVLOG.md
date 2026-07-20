@@ -1,5 +1,18 @@
 # DEVLOG — Empowr Members
 
+## 2026-07-21 (Self-serve cancellation removed — matches new no-refund legal policy)
+
+Flagged 2026-07-20: this platform's Step 7 self-serve cancellation implemented the *old* 48h refund/credit policy, contradicting the new Terms & Conditions v1.1 / Programme Policies v1.1 ("bookings are final by default; no refunds, cancellations, or transfers; exceptions only at Empowr's discretion, on request"). Fixed this session — member-initiated cancellation is no longer offered at all; the only remaining refund/credit path is the admin occurrence-cancel route (Step 8), which is already an explicit, human, per-occurrence discretionary decision.
+
+- **Deleted:** `lib/cancellation.ts` (the self-serve policy-gate function), `app/api/bookings/[id]/cancel/route.ts` (the self-serve refund/credit endpoint), `lib/emails/booking-cancellation.ts` (the member-cancellation-notice email — no longer sent). Moved the shared `CancellationOutcome` type (still needed by the occurrence-cancelled email) to `lib/emails/types.ts`.
+- **`business-rules.ts`:** removed `CANCELLATION_CUTOFF_HOURS` (no cutoff exists anymore — there's nothing to cut off). Kept `CREDIT_EXPIRY_MONTHS`; it's still live, just now exclusively for admin-issued credits via occurrence-cancel.
+- **`BookingsList.tsx`:** dropped the refund/credit picker UI, the `useState`/fetch plumbing, and `"use client"` (no longer needed — the component is now fully server-rendered). Confirmed upcoming bookings show a static "email enquiries@empowrcic.org, exceptions at our discretion" notice instead.
+- **`PolicyNotice.tsx`** (shown pre-booking) and **`booking-confirmation.ts`**'s `cancellationPolicyLine()` (sent post-booking): copy rewritten to match the new default — `non_refundable` offerings (Roller Quad Camp, Roller Disco) get a flat no-exceptions line; `standard` offerings get the no-refund-by-default-but-discretionary-on-request line.
+- **`notifications.ts`**: removed the now-dead `sendBookingCancellationEmail` orchestrator.
+- **Not changed:** the admin occurrence-cancel route (`api/admin/occurrences/[id]/cancel`) and its UI — already an explicit admin-decided action (refund or credit, chosen per cancellation), which is exactly what "at our discretion" means. Only its stale doc-comment (referencing the now-deleted 48h/refund_policy member gate) was corrected.
+- **Verified:** clean `next build` (typecheck + lint + all 17 routes compile, `/api/bookings/[id]/cancel` confirmed absent from the route manifest). **Not verified live in-browser** — the dev database has no seeded catalogue/offerings (matches the known Q6/timetable-seeding gap), so there was nothing to click through for a real booking/cancellation flow. Worth a manual pass once real timetable data exists.
+- Resolves the memory.md-flagged conflict from 2026-07-20; KB `entities/sessions.md`'s credit-expiry note updated to reflect that credits are admin-only now (not obsolete, just narrower in scope).
+
 ## 2026-07-16 (PassKit integration scoped + Track A handover)
 
 - PassKit wallet-pass integration scoped and ADR'd: two pass types — **Track A** per-booking session pass (Event Tickets protocol, issue on booking-confirm / void on both cancel paths / one pass per participant, per-run bookings one pass per run) and **Track B** membership pass (Members/Loyalty, blocked on Phase 2 Steps 2–3). Track A greenlit; build plan at `planning/passkit/CONTEXT.md` (Steps A0–A8) for a Sonnet session to execute — **start at A0: verify Event Tickets licensing + REST auth mechanism in the PassKit dashboard/docs before writing code** (both are unverified assumptions)
