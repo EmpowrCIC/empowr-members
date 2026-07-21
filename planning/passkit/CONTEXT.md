@@ -1,8 +1,8 @@
 # PassKit Integration — Build Plan
 
-**Status:** Track A greenlit for build (user-confirmed 2026-07-16). Track B blocked on Phase 2 Steps 2–3.
-**Credentials:** REST API Key + Secret vaulted as `MEMBERS_PASSKIT_API_KEY` / `MEMBERS_PASSKIT_API_SECRET` (2026-07-15). Not yet in the distribution scripts or any code.
-**Account:** PassKit account exists (signed up 2026-07); dashboard state unknown — nothing set up in it yet.
+**Status:** Track A greenlit for build (user-confirmed 2026-07-16). Track B blocked on Phase 2 Steps 2–3. **Step A0 DONE + Step A1 DONE (2026-07-17)** — see below.
+**Credentials:** REST API Key + Secret vaulted as `MEMBERS_PASSKIT_API_KEY` / `MEMBERS_PASSKIT_API_SECRET` (2026-07-15). As of 2026-07-17: wired into `pull-to-local.ps1` (generic, no code change needed) and `sync-to-netlify.ps1`'s Members entry (as `PASSKIT_API_KEY`/`PASSKIT_API_SECRET`); pulled to `src/.env.local` and pushed to Netlify — both legs confirmed working live (see Step A0 auth test below).
+**Account:** PassKit account exists (signed up 2026-07); has at least one existing `EVENT_TICKETING` template ("My Production") — dashboard is not empty, contrary to earlier assumption.
 
 ## What PassKit does here
 
@@ -21,21 +21,61 @@ Where scanning pays off operationally is Phase 3's check-in view — Track A onl
 
 Follow the Phase 1 conventions throughout: writes via service client in API routes, never-throw side-effect calls (mirror `lib/email.ts`'s `sendEmail`), zod on inputs, e2e with seeded rows + verified zero-leftover cleanup.
 
-### Step A0 — Verify before coding (unverified assumptions, flagged)
-1. Log into the PassKit dashboard (user has the login) and confirm the **Event Tickets protocol is licensed/available** on this account — Members/Loyalty and Event Tickets are separate PassKit products; the plan may not include both.
-2. Confirm the **REST auth mechanism** from their docs (https://docs.passkit.io/ — key+secret pair typically mints a JWT per request; do not guess, read the auth page). SDK Credentials in the dashboard are for client-embedded use — **not** used here; server-side REST only.
-3. Confirm pass-update semantics (update-in-place vs reissue) while in the docs — recorded as an assumption in memory, never independently verified.
-4. Check their Node quickstart for patterns: github.com/PassKit/passkit-node-quickstart.
+### Step A0 — Verify before coding — DONE (2026-07-17), all 4 items empirically confirmed
+1. **Event Tickets licensed** — confirmed twice: (a) dashboard "new pass" wizard shows Event Tickets as a normal, unlocked protocol tab with working templates (BASIC EVENT TICKET, SPORTING EVENT); (b) a live API call (below) returned an existing `EVENT_TICKETING`-protocol template already on the account ("My Production", id `1HsBMCQptDR63w5FFLd0vT`) — note this means the dashboard is **not** actually empty as originally assumed; worth a quick look to see if that template was created intentionally.
+2. **REST auth mechanism — confirmed working end-to-end.** `docs.passkit.io` is a JS-rendered SPA that WebFetch cannot read past the nav shell (tried repeatedly, structural limitation, not worth retrying). The working recipe came from PassKit's own `github.com/PassKit/jwt-token-generator-zapier` reference implementation, cross-checked live against `POST https://api.pub1.passkit.io/templates/list`:
+   - JWT header: `{"alg":"HS256","typ":"JWT"}`
+   - JWT payload/claims: `{ uid: <API Key>, iat: <unix seconds>, exp: <unix seconds>, web: false }` — **claim is `uid`, not `key`; there is no `url` or `method` claim** (an earlier search result claiming per-request-bound `url`/`method` claims and a `PKAuth` auth scheme was wrong/hallucinated — do not reuse those details)
+   - Signature: HMAC-SHA256 over `base64url(header) + "." + base64url(payload)`, signing key = the raw API **Secret** string (UTF-8 bytes, not base64-decoded first)
+   - Token = `base64url(header).base64url(payload).base64url(signature)`
+   - Header on the actual API call: `Authorization: Bearer <jwt>` (not `PKAuth` — that was the wrong detail above)
+   - **Clock-skew gotcha**: a fresh `iat` (= exact call time) got `401 "Token used before issued"` even though the header/payload parsed fine. Backdating `iat` by 60 seconds fixed it. Build `lib/passkit.ts`'s token generator with this same 60s buffer baked in.
+   - Endpoint base: `https://api.pub1.passkit.io` (EU/pub1 — matches the account region). Errors come back as gRPC-gateway JSON (`{"error":{"code":<grpc status>,"message":...}}`) since PassKit's REST layer is a grpc-gateway proxy in front of their real gRPC backend.
+3. **Pass-update semantics confirmed** — passes support genuine in-place updates (push notification / pull-to-refresh), no reissue needed. Source: [Introduction to Updating Passes](https://help.passkit.com/en/articles/6609055-introduction-to-updating-passes).
+4. **Node quickstart reviewed and ruled out** — `passkit-node-quickstart` / `passkit-node-sdk` / `passkit-node-grpc-sdk` are 100% mutual-TLS gRPC (client cert + private key + passphrase via `grpc.credentials.createSsl()`), a completely different credential type ("SDK Credentials") from the plain REST Key+Secret we're using. Confirmed via reading `src/lib/client.js` directly — zero JWT code anywhere in that repo. Correctly not used here; our plain REST+JWT approach (above) is the right fit for Netlify serverless functions anyway (gRPC + cert files doesn't fit that runtime well).
 
 ### Step A1 — Credentials into the pipeline
 - Add `MEMBERS_PASSKIT_API_KEY` / `MEMBERS_PASSKIT_API_SECRET` to `F:\Projects\scripts\pull-to-local.ps1` (members entry) and `sync-to-netlify.ps1` `$siteVarMap` (Members site `76f903e4-3795-406a-9478-34be6b0ed015`).
 - Pull to `src/.env.local`; push to Netlify. Gotcha: existing-key pushes need `PATCH /accounts/{id}/env/{key}?site_id=...` flat body, context ≠ `all` — see project memory.md.
 - Never Read `.env` files directly; PowerShell-extract silently. `.ps1` files ASCII-only.
 
-### Step A2 — PassKit dashboard setup (Event Tickets)
-- Create the production/venue/event-type structure their protocol requires (hierarchy per their docs — likely venue → production → event → ticket).
-- Design the ticket template: Empowr brand assets at `Empowr CIC/_brand/` (white eye on brand blue). Fields: offering title, participant name, date/time, venue name + address, QR (payload = booking id).
-- Record the template/production IDs in this file when created.
+### Step A2 — PassKit dashboard setup (Event Tickets) — DONE (2026-07-21), built via API not dashboard, proven end-to-end
+
+**Real objects created (production account):**
+| Object | ID | uid |
+|---|---|---|
+| Images (icon + logo) | icon `4lD7zAjjz7mkJklZeuSZbe`, logo `6WENXpxwiXapjfRkzMgE8s`, appleLogo `4drf8jqU2OaR1MkUzPf6gr` (auto-derived from logo) | — |
+| Template ("Empowr Session Pass") | `3e9Vjyl8HGaSa02z0Wo1sY` | — |
+| Production ("Empowr Sessions") | `27xx6YlVGWi65uxtO1mNbB` | `empowr-sessions` |
+| Ticket Type ("Empowr Session Ticket") | `4KyxqXkNfBOZDot9RfvqVe` | `empowr-session-ticket` |
+
+**Orphaned (first attempt, wrong uid — harmless, no delete endpoint found, safe to ignore):** Template `670y5xsYysSx0QGqHwyjOW`, Production `1juRXlbA6zqEEFWNGSIBny`, Ticket Type `0YSfJ5boLqM4lMhR6j8aeB`. A throwaway test venue (`3N7SGGq9s2rOHylbVmV7rY`, uid `test-venue-delete-me`) and test ticket (`6kdTbgff3vX92NLZUSmVoK`) also exist from the end-to-end proof below — both clearly named, safe to leave or delete once a Venue/Ticket delete path is found.
+
+**Blocked: Apple Wallet passes won't work for real users yet.** `passTypeIdentifier` is set to `pass.com.empowrcic.members` (a real value, chosen now so nothing needs to change later) but Apple requires a paid Apple Developer Program membership to register that Pass Type ID and generate a signing certificate, which then gets uploaded to PassKit against this Production. **As of 2026-07-21, that membership is in progress, not yet confirmed.** Until the cert is uploaded, PassKit rejects `PROJECT_PUBLISHED` status — the Production was created with `status: ["PROJECT_ACTIVE_FOR_OBJECT_CREATION", "PROJECT_DRAFT"]` instead (server error confirmed: status must contain either `PROJECT_DRAFT` or `PROJECT_PUBLISHED`, and `PROJECT_PUBLISHED` alone was rejected as "account not eligible for production use"). **Once the cert is ready: flip Production status to include `PROJECT_PUBLISHED` instead of `PROJECT_DRAFT`** (exact update mechanism — POST to `/eventTickets/production` again with the same `id`, or a dedicated update endpoint — not yet confirmed, treat as a fresh small investigation). Google Wallet is a separate mechanism and should be unaffected by this gap.
+
+**Confirmed REST paths** (base `https://api.pub1.passkit.io`, all POST unless noted):
+- `/images` — create (bundles icon/logo/appleLogo etc. in one call, returns an `imageIds`-shaped object)
+- `/template` (singular, NOT `/templates`) — create. `/templates/list` and `/templates/count` (plural) are the read endpoints — **the create path breaks the plural-resource-root naming pattern the reads follow**, found via a help.passkit.com article, not guessable from the reads.
+- `/eventTickets/production` — create
+- `/eventTickets/venue` — create
+- `/eventTickets/ticketType` — create
+- `/eventTickets/ticket/id` — issue a ticket (confirmed from help.passkit.com's "Create an event ticket" article)
+- No Event — Create call exists or is needed (see below)
+
+**Critical: the PassKit v4 SDK Postman collection is 100% gRPC** (every request targets `grpc://grpc.{{passkitEnv}}.passkit.io:443`), and its "Message" bodies show the **gRPC wire/reflection shape**, not the REST/JSON-mapping shape our plain Key+Secret JWT approach actually needs. Several fields differ between the two, discovered by iterating live against real (safe, one-time-setup) create calls:
+- **Timestamps**: gRPC shows `{"seconds":"...","nanos":0}` (raw `google.protobuf.Timestamp` wire format); REST/JSON needs an **RFC3339 string** instead (e.g. `"2026-07-21T16:36:06Z"`). Applies to `doorsOpen`/`scheduledStartDate`/`actualStartDate`/`endDate`.
+- **`metaData`**: gRPC shows an array of `{key, value}` objects; REST/JSON needs a **plain object/map** (`{"offeringTitle": "Roller Disco"}`).
+- **Object references** (`production`, `venue`, `ticketType` inside a Ticket — Issue call): gRPC/the example bodies showed flat `productionId`/`venueId`/`ticketTypeId` strings; REST/JSON actually needs **nested objects with both `id` AND `uid`** — e.g. `"production": {"id": "27xx...", "uid": "empowr-sessions"}`. `uid` is a separate user-assigned identifier from PassKit's own `id` (set at create time, defaults to empty if you pass `""`) and **is required when referencing that object elsewhere, not just at creation** — always give every created object a real, non-empty `uid`.
+- **Template reuse constraint**: a Template can only be the before/after-redeem template of **one** Ticket Type at a time — reusing one across ticket types 409s ("before redeem template is already in use"). Each distinct Ticket Type needs its own Template (or its own before/after pair).
+- **`landingPageSettings.localizedTextOverrides`**: object/map (`{}`), not an array, despite the plural name.
+- **`barcode.format`**: bare enum value `"QR"`, not `"QR_CODE"`.
+- Errors are gRPC-gateway JSON (`{"error": "..."}`, sometimes with a byte-offset proto parse error, sometimes a named `validation err:` message) — the validation errors are precise and safe to iterate against live (one-time setup calls have no side effects on a 400).
+
+**No separate "Event" object needs to be created.** Confirmed empirically: issuing a ticket with `event: {production, venue, doorsOpen, scheduledStartDate, actualStartDate, endDate}` inline **auto-creates** an Event behind the scenes and returns its `eventId` in the response — there is no Event — Create call in the API at all. This means Step A5 (issue-on-confirm) never needs to pre-create or store a PassKit Event per occurrence; every ticket issuance just carries its own timestamp snapshot.
+
+**Architecture confirmed**: one shared Production, one shared Ticket Type, one shared Template (all created above) — Venue is the only object that needs one-per-real-venue. **`mem_venues` is currently empty** (no real venues seeded yet, real-timetable work still gated on Q6/Jasmine) — so Venue creation is **not** backfilled here; instead it gets wired into the admin venue create route (`POST /api/admin/venues`) so every future real venue automatically gets a `passkit_venue_id`, give-or-take Step A3's migration adding that column.
+
+**JWT auth recipe** (working, proven — see Step A0 above for the full writeup): claim `uid` (not `key`), no `url`/`method` claims, `Authorization: Bearer <jwt>` (not `PKAuth`), 60s-backdated `iat` for clock-skew tolerance. Reusable `lib/passkit.ts`-shape helper functions were prototyped in a scratch PowerShell script this session (`Get-PassKitCreds`, `New-PassKitJwt`, `Invoke-PassKitRaw`) — port this logic directly into the real TypeScript client in Step A4, don't rediscover it.
 
 ### Step A3 — Schema migration
 - `passkit_pass_id text` (nullable) on `mem_bookings`; migration file in `src/supabase/migrations/`, applied via MCP, then update `_config/registry/supabase.md`. No RLS change (column rides existing policies; writes are service-client only).
