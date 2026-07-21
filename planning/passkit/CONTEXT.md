@@ -1,6 +1,6 @@
 # PassKit Integration — Build Plan
 
-**Status:** Track A greenlit for build (user-confirmed 2026-07-16). Track B blocked on Phase 2 Steps 2–3. **Steps A0–A4 DONE (A0/A1 2026-07-17, A2/A3/A4 2026-07-21)** — see below. **Next: Step A5** (issue on confirmation, wired into the Stripe webhook).
+**Status:** Track A greenlit for build (user-confirmed 2026-07-16). Track B blocked on Phase 2 Steps 2–3. **Steps A0–A7 DONE (A0/A1 2026-07-17, A2/A3/A4 2026-07-21, A5/A6/A7 2026-07-21)** — see below. **Next: Step A8** (live e2e proof + deploy) — the only remaining step.
 **Credentials:** REST API Key + Secret vaulted as `MEMBERS_PASSKIT_API_KEY` / `MEMBERS_PASSKIT_API_SECRET` (2026-07-15). As of 2026-07-17: wired into `pull-to-local.ps1` (generic, no code change needed) and `sync-to-netlify.ps1`'s Members entry (as `PASSKIT_API_KEY`/`PASSKIT_API_SECRET`); pulled to `src/.env.local` and pushed to Netlify — both legs confirmed working live (see Step A0 auth test below).
 **Account:** PassKit account exists (signed up 2026-07); has at least one existing `EVENT_TICKETING` template ("My Production") — dashboard is not empty, contrary to earlier assumption.
 
@@ -94,16 +94,23 @@ Follow the Phase 1 conventions throughout: writes via service client in API rout
   - **Convention adopted for `lib/passkit.ts`**: every object we create gets `uid` = that object's own Supabase row id (`mem_venues.id` for venues, `mem_bookings.id` for tickets) — makes every PassKit object traceable back to its DB row without a separate lookup table.
 - **`createPassKitVenue()` e2e-proven live** (2026-07-21): inserted a real `mem_venues` row, created its PassKit Venue, persisted `passkit_venue_id`, GET-verified the round-trip (name/uid/address all matched), then deleted both sides — zero leftover rows on either system. `issueSessionPass()`/`voidPass()` are not yet e2e-proven end-to-end as wired code (the underlying REST shapes they use *were* proven live during Step A2/A4 probing — issuing and hard-deleting a real test ticket both succeeded) — Step A8 is where they get exercised through the real booking flow.
 
-### Step A5 — Issue on confirmation
-- In the Stripe webhook's first-confirm path (where `sendBookingConfirmationForSession` fires): issue one pass **per booking row** (per participant — multi-child bookings get one pass each), persist `passkit_pass_id`, failure-swallowed.
-- Course runs (`per_run`): **one pass per run booking** covering all weeks (decided 2026-07-16), not per occurrence.
+### Step A5 — Issue on confirmation — DONE (2026-07-21)
+- New `issuePassesForSession(service, checkoutSessionId)` orchestrator in `lib/notifications.ts` (colocated with the email orchestrator, not in `lib/passkit.ts` — keeps all Supabase-row-shape mapping in one place, matches Step A6's need to reuse the same rows). Called from the webhook's first-confirm branch, right before `sendBookingConfirmationForSession`.
+- Queries confirmed booking rows for the session with occurrence/course_run → offering → venue nested selects (mirrors `BOOKING_EMAIL_SELECT`'s shape). One `issueSessionPass()` call **per booking row** (= per participant, since `mem_bookings` already has exactly one row per participant per occurrence/run — confirmed from the `uniq_mem_booking_participant_occurrence`/`_run` constraints, so no extra "one per participant" logic was needed).
+- **Course runs (`per_run`): one pass spans the whole run** — implemented by pulling every occurrence under that `course_run_id` (nested `occurrences:mem_occurrences(starts_at, ends_at)`) and taking min(starts_at)/max(ends_at) as the ticket's `doorsOpen`/`endDate` window, since `mem_course_runs` itself only has `starts_on`/`ends_on` **dates** (no time-of-day) — the per-occurrence timestamps are the only source of real start/end times.
+- Rows whose resolved venue has no `passkit_venue_id` yet (venue predates the PassKit wiring, or PassKit venue-creation failed) are **skipped silently** — a missing pass must never block a confirmed, paid booking.
+- Not yet e2e-proven live (needs a real Checkout session + seeded venue with a real `passkit_venue_id` — that's Step A8). Verified via clean `next build` only.
 
-### Step A6 — Pass link in the confirmation email
-- Add the wallet install URL to `lib/emails/booking-confirmation.ts` (per participant if multiple) using the existing `ctaButton` primitive — "Add to Apple/Google Wallet".
-- Email builders are pure: pass the URL in via the orchestrator (`lib/notifications.ts`), keep builders DB-free.
+### Step A6 — Pass link in the confirmation email — DONE (2026-07-21)
+- `passInstallUrl(passId)` extracted as a small exported helper in `lib/passkit.ts` (both `issueSessionPass()` and the email orchestrator now share it, instead of the URL format living in two places).
+- `BookingEmailSummary` (`lib/emails/types.ts`) gained `passInstallUrls: (string | null)[]`, same index order as `participantNames` — built in `summariseRows()` by reading each row's `passkit_pass_id` (added to `BOOKING_EMAIL_SELECT`). This relies on Step A5's `issuePassesForSession` having already persisted the id **before** `sendBookingConfirmationForSession` runs its own fresh query — the webhook awaits A5 first, so this is safe without any explicit hand-off between the two functions.
+- `lib/emails/booking-confirmation.ts`: one `ctaButton` per participant with a non-null install URL — label is "Add to Apple/Google Wallet" for a single participant, or "Add {first name}'s pass to Wallet" per participant when there's more than one (so they're distinguishable). Participants with no pass (skipped in A5) just get no button — never a broken link.
 
-### Step A7 — Void on cancellation
-- Member self-serve cancellation was removed 2026-07-21 (no-refund policy change) — the only cancel path left is admin occurrence-cancel (`POST /api/admin/occurrences/[id]/cancel`): after the status flip succeeds, `voidPass()` if `passkit_pass_id` set — failure-swallowed, never blocks the refund/credit.
+### Step A7 — Void on cancellation — DONE (2026-07-21)
+- Member self-serve cancellation was removed 2026-07-21 (no-refund policy change) — the only cancel path left is admin occurrence-cancel (`POST /api/admin/occurrences/[id]/cancel`). Added `passkit_pass_id` to that route's booking select/type; after each confirmed booking's status flip to `refunded`/`credited` succeeds, `voidPass()` fires if `passkit_pass_id` is set. `voidPass()` is already never-throw internally, so no extra try/catch was needed — it genuinely cannot block the refund/credit it follows.
+- Pending (`pending_payment`) bookings released by the same route never had a pass issued (Step A5 only fires on confirm), so nothing to void there.
+
+**A5/A6/A7 combined verification**: clean `next build` (typecheck + lint + all 17 routes compile) after each step. **Not e2e-proven live** — needs a seeded venue with a real `passkit_venue_id`, a real occurrence, and a TEST-mode Checkout session run through a dev webhook; that's the whole of Step A8 below.
 
 ### Step A8 — e2e + deploy
 - Seed venue/offering/occurrence + test account (Step 4/7 e2e pattern), book with a TEST-mode payment against a dev webhook, confirm: pass created in PassKit, id persisted, email contains install link, cancel voids the pass. Cleanup to zero leftover rows.

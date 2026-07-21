@@ -56,12 +56,30 @@ export function buildBookingConfirmationEmail(
       ).replace(/\n/g, "<br>")}</p>`
     : "";
 
+  // Wallet pass buttons — one per participant with an issued pass; label
+  // includes the first name only when there's more than one to tell them
+  // apart. Participants without a pass (PassKit failure, or no venue id
+  // yet) are silently skipped — the booking is still valid without one.
+  const walletButtons = data.participantNames
+    .map((name, i) => ({ name, url: data.passInstallUrls[i] }))
+    .filter((p): p is { name: string; url: string } => Boolean(p.url))
+    .map(({ name, url }) =>
+      ctaButton(
+        data.participantNames.length > 1
+          ? `Add ${name.split(" ")[0]}'s pass to Wallet`
+          : "Add to Apple/Google Wallet",
+        url
+      )
+    )
+    .join("");
+
   const body = `
 <p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:${EMAIL_BRAND.mid};">
 Great news — your booking is confirmed and ${allSet}. Here are the details:
 </p>
 ${panel(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0">${summaryRows}</table>`)}
 ${kitBlock}
+${walletButtons}
 <p style="margin:16px 0 6px 0;font-size:14px;line-height:1.6;color:${EMAIL_BRAND.mid};">
 ${cancellationPolicyLine(data.refundPolicy)}
 </p>

@@ -16,6 +16,13 @@ const PASS_URL_BASE = "https://pub1.pskt.io";
 const PRODUCTION = { id: "27xx6YlVGWi65uxtO1mNbB", uid: "empowr-sessions" };
 const TICKET_TYPE = { id: "4KyxqXkNfBOZDot9RfvqVe", uid: "empowr-session-ticket" };
 
+/** The wallet install URL for an issued pass — never returned by the
+ *  issue-ticket response itself (see planning/passkit/CONTEXT.md Step A4),
+ *  always client-constructed from the ticket id. */
+export function passInstallUrl(passId: string): string {
+  return `${PASS_URL_BASE}/${passId}`;
+}
+
 function base64url(input: Buffer | string): string {
   const buf = typeof input === "string" ? Buffer.from(input, "utf8") : input;
   return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -112,7 +119,7 @@ export async function issueSessionPass(
       metaData: { offeringTitle: input.offeringTitle },
       barcode: { format: "QR" },
     });
-    return { passId: data.ticketId, installUrl: `${PASS_URL_BASE}/${data.ticketId}` };
+    return { passId: data.ticketId, installUrl: passInstallUrl(data.ticketId) };
   } catch (err) {
     console.error("PassKit issueSessionPass failed", input.bookingId, err);
     return null;
