@@ -1,6 +1,6 @@
 # PassKit Integration — Build Plan
 
-**Status:** Track A greenlit for build (user-confirmed 2026-07-16). Track B blocked on Phase 2 Steps 2–3. **Step A0 DONE + Step A1 DONE (2026-07-17)** — see below.
+**Status:** Track A greenlit for build (user-confirmed 2026-07-16). Track B blocked on Phase 2 Steps 2–3. **Steps A0–A4 DONE (A0/A1 2026-07-17, A2/A3/A4 2026-07-21)** — see below. **Next: Step A5** (issue on confirmation, wired into the Stripe webhook).
 **Credentials:** REST API Key + Secret vaulted as `MEMBERS_PASSKIT_API_KEY` / `MEMBERS_PASSKIT_API_SECRET` (2026-07-15). As of 2026-07-17: wired into `pull-to-local.ps1` (generic, no code change needed) and `sync-to-netlify.ps1`'s Members entry (as `PASSKIT_API_KEY`/`PASSKIT_API_SECRET`); pulled to `src/.env.local` and pushed to Netlify — both legs confirmed working live (see Step A0 auth test below).
 **Account:** PassKit account exists (signed up 2026-07); has at least one existing `EVENT_TICKETING` template ("My Production") — dashboard is not empty, contrary to earlier assumption.
 
@@ -61,6 +61,10 @@ Follow the Phase 1 conventions throughout: writes via service client in API rout
 - `/eventTickets/ticketType` — create
 - `/eventTickets/ticket/id` — issue a ticket (confirmed from help.passkit.com's "Create an event ticket" article)
 - No Event — Create call exists or is needed (see below)
+- `/eventTickets/venue/{id}` (GET) — read a venue by id; `/eventTickets/venue` (DELETE, body `{"id": "..."}`) — hard-delete
+- `/eventTickets/ticket/id/{id}` (GET) — read a ticket by id; `/eventTickets/ticket` (DELETE, body `{"ticketId": "..."}` — note the different field name from venue's delete) — hard-delete, confirmed void mechanism for Step A7
+- Pass install URL is client-constructed, not returned by the API: `https://pub1.pskt.io/{ticketId}` (EU/pub1 region)
+- See Step A4 below for the full writeup of how these were found (PassKit's own Golang gRPC-gateway SDK source on GitHub, which lists every registered REST path)
 
 **Critical: the PassKit v4 SDK Postman collection is 100% gRPC** (every request targets `grpc://grpc.{{passkitEnv}}.passkit.io:443`), and its "Message" bodies show the **gRPC wire/reflection shape**, not the REST/JSON-mapping shape our plain Key+Secret JWT approach actually needs. Several fields differ between the two, discovered by iterating live against real (safe, one-time-setup) create calls:
 - **Timestamps**: gRPC shows `{"seconds":"...","nanos":0}` (raw `google.protobuf.Timestamp` wire format); REST/JSON needs an **RFC3339 string** instead (e.g. `"2026-07-21T16:36:06Z"`). Applies to `doorsOpen`/`scheduledStartDate`/`actualStartDate`/`endDate`.
@@ -77,13 +81,18 @@ Follow the Phase 1 conventions throughout: writes via service client in API rout
 
 **JWT auth recipe** (working, proven — see Step A0 above for the full writeup): claim `uid` (not `key`), no `url`/`method` claims, `Authorization: Bearer <jwt>` (not `PKAuth`), 60s-backdated `iat` for clock-skew tolerance. Reusable `lib/passkit.ts`-shape helper functions were prototyped in a scratch PowerShell script this session (`Get-PassKitCreds`, `New-PassKitJwt`, `Invoke-PassKitRaw`) — port this logic directly into the real TypeScript client in Step A4, don't rediscover it.
 
-### Step A3 — Schema migration
-- `passkit_pass_id text` (nullable) on `mem_bookings`; migration file in `src/supabase/migrations/`, applied via MCP, then update `_config/registry/supabase.md`. No RLS change (column rides existing policies; writes are service-client only).
+### Step A3 — Schema migration — DONE (2026-07-21)
+- `passkit_pass_id text` (nullable) on `mem_bookings`; `passkit_venue_id text` (nullable) on `mem_venues`. Migration `20260721180000_members_passkit_columns.sql`, applied via MCP, `_config/registry/supabase.md` updated. No RLS change (columns ride existing policies; writes are service-client only).
 
-### Step A4 — `lib/passkit.ts`
-- Client singleton reading the two env vars; `issueSessionPass(bookingData)` and `voidPass(passId)`.
-- **Never-throw** (log + return null/bool) — pass issuance must not fail a webhook or cancellation, same contract as `sendEmail()`.
-- Returns pass id + install URL on success.
+### Step A4 — `lib/passkit.ts` — DONE (2026-07-21), e2e-proven for the venue half
+- Built `createPassKitVenue()`, `issueSessionPass()`, `voidPass()` — plain `fetch` + hand-rolled JWT (Node `crypto`, no new dependency), never-throw (log + return null/bool), same contract as `sendEmail()`.
+- **New confirmed REST facts, discovered live this session while building the client** (not in Step A2's table above — read these before touching `lib/passkit.ts` again):
+  - **`GET /eventTickets/venue/{id}`** works directly (no `/id/` sub-segment, unlike tickets below) — returns the venue's stored shape: `{id, uid, name, localizedName, address, localizedAddress, timezone, gpsCoords: [], eventUrls, room, created, updated}`. **`address` is a flat string**, not a nested Address object — simpler than the ticket/event gotchas implied.
+  - **`GET /eventTickets/ticket/id/{id}`** (note: `ticket/id/` then the real id — a 3-segment path, confirmed via the PassKit Golang gRPC-gateway SDK's `a_rpc.pb.gw.go` on GitHub, which lists every REST path PassKit's mux registers). Returns the full ticket incl. `status` (`"ISSUED"`), `passMetaData.status` (`"PASS_ISSUED"`), the resolved `event`/`venue`/`ticketType` sub-objects, `metaData`.
+  - **Delete endpoints use different body field names per resource** — easy to get wrong: `DELETE /eventTickets/venue` wants `{"id": "<venueId>"}`; `DELETE /eventTickets/ticket` wants `{"ticketId": "<ticketId>"}` (NOT `id`). Both are **genuine hard deletes** — confirmed live: a deleted ticket's `GET .../id/{id}` 404s immediately after (`"ticket with id[...] does not exist"`), there's no soft-void state. This is what backs `voidPass()`.
+  - **Pass install URL is NOT returned by the issue-ticket response** — the response is just `{ticketId, productionId, venueId, ticketTypeId, eventId}`. The URL is constructed client-side: `https://pub1.pskt.io/{ticketId}` (EU/pub1 — matches our API region; the US mirror is `pub2.pskt.io`), confirmed via help.passkit.com's "Introduction to distributing passes" article, not an API field.
+  - **Convention adopted for `lib/passkit.ts`**: every object we create gets `uid` = that object's own Supabase row id (`mem_venues.id` for venues, `mem_bookings.id` for tickets) — makes every PassKit object traceable back to its DB row without a separate lookup table.
+- **`createPassKitVenue()` e2e-proven live** (2026-07-21): inserted a real `mem_venues` row, created its PassKit Venue, persisted `passkit_venue_id`, GET-verified the round-trip (name/uid/address all matched), then deleted both sides — zero leftover rows on either system. `issueSessionPass()`/`voidPass()` are not yet e2e-proven end-to-end as wired code (the underlying REST shapes they use *were* proven live during Step A2/A4 probing — issuing and hard-deleting a real test ticket both succeeded) — Step A8 is where they get exercised through the real booking flow.
 
 ### Step A5 — Issue on confirmation
 - In the Stripe webhook's first-confirm path (where `sendBookingConfirmationForSession` fires): issue one pass **per booking row** (per participant — multi-child bookings get one pass each), persist `passkit_pass_id`, failure-swallowed.
@@ -94,7 +103,7 @@ Follow the Phase 1 conventions throughout: writes via service client in API rout
 - Email builders are pure: pass the URL in via the orchestrator (`lib/notifications.ts`), keep builders DB-free.
 
 ### Step A7 — Void on cancellation
-- Member self-serve cancel (`POST /api/bookings/[id]/cancel`) and admin occurrence-cancel (`POST /api/admin/occurrences/[id]/cancel`): after the status flip succeeds, `voidPass()` if `passkit_pass_id` set — failure-swallowed, never blocks the refund/credit.
+- Member self-serve cancellation was removed 2026-07-21 (no-refund policy change) — the only cancel path left is admin occurrence-cancel (`POST /api/admin/occurrences/[id]/cancel`): after the status flip succeeds, `voidPass()` if `passkit_pass_id` set — failure-swallowed, never blocks the refund/credit.
 
 ### Step A8 — e2e + deploy
 - Seed venue/offering/occurrence + test account (Step 4/7 e2e pattern), book with a TEST-mode payment against a dev webhook, confirm: pass created in PassKit, id persisted, email contains install link, cancel voids the pass. Cleanup to zero leftover rows.
