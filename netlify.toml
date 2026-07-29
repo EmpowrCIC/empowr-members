@@ -6,6 +6,12 @@
 [build.environment]
   NODE_VERSION = "20"
 
+[[redirects]]
+  from   = "/legal/:slug"
+  to     = "https://legalhub.pecuvate.com/share/empowr/org/:slug"
+  status = 200
+  force  = true
+
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 

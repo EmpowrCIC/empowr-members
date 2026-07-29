@@ -1,5 +1,12 @@
 # DEVLOG — Empowr Members
 
+## 2026-07-29 (Launch-gate: legal policy links wired) — spec risk #5 resolved
+
+- **No new Sanity content needed**: queried the CMS directly and confirmed the org privacy policy (platform `org`, v1.2, last updated 2026-07-28) already has a "Programme Bookings" section covering DOB, health/accessibility info, and safeguarding for under-18s, with its own retention table — this generically covers what Members collects since Members is legally the same entity (Empowr CIC), not a separate one. No Members-specific `policy.platform` enum value was added; reuse over duplication.
+- **Wired into the live site** (previously zero legal links existed anywhere in the app — verified via grep): added the same `/legal/:slug` → `https://legalhub.pecuvate.com/share/empowr/org/:slug` Netlify redirect proxy that Main Site already uses (netlify.toml), added `privacyPolicy`/`termsAndConditions`/`riskWaiver` entries to `lib/links.ts`, built a new `Footer.tsx`, mounted it once in the root `layout.tsx` so it covers every route group (public/member/admin/auth) without touching each nested layout individually.
+- Verified: clean `next build` (typecheck + lint + all 17 routes), and confirmed `legalhub.pecuvate.com/share/empowr/org/privacy-policy` returns 200 live.
+- Not yet done: live-mode Stripe smoke test (still outstanding from Step 9), registries update.
+
 ## 2026-07-21 (PassKit Track A — Step A8: live e2e proof passed, deployed — Track A COMPLETE)
 
 - **e2e-proven live end to end**, driving the real running app rather than reimplementing its logic: seeded a real venue/offering/occurrence/account/booking, created a real PassKit Venue, self-signed a `checkout.session.completed` event at the dev server's actual `/api/webhooks/stripe` (Stripe SDK's `generateTestHeaderString`, the project's established local-webhook pattern) — confirmed `passkit_pass_id` persisted and a real ticket exists on PassKit tied to the shared Production.

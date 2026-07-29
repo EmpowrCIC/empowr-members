@@ -6,6 +6,9 @@ export const links = {
   quiz: "https://start.empowrcic.org/quiz",
   hafBookings: "https://app.holidayactivities.com/parent/providers/empowr-cic",
   contactEmail: "general@empowrcic.org",
+  privacyPolicy: "/legal/privacy-policy",
+  termsAndConditions: "/legal/terms-and-conditions",
+  riskWaiver: "/legal/risk-waiver",
 } as const;
 
 // This app's own public base. Emails and other absolute-URL contexts use
