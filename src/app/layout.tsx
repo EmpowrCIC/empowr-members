@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Nunito } from "next/font/google";
 import { Footer } from "@/components/Footer";
+import PostHogProvider from "@/components/PostHogProvider";
+import CookieConsentBanner from "@/components/CookieConsentBanner";
 import "./globals.css";
 
 const nunito = Nunito({ subsets: ["latin"], variable: "--font-nunito" });
@@ -44,8 +46,11 @@ export default function RootLayout({
   return (
     <html lang="en-GB">
       <body className={`${nunito.variable} flex min-h-screen flex-col font-sans antialiased`}>
-        <div className="flex-1">{children}</div>
-        <Footer />
+        <PostHogProvider>
+          <div className="flex-1">{children}</div>
+          <Footer />
+          <CookieConsentBanner />
+        </PostHogProvider>
       </body>
     </html>
   );
