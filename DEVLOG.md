@@ -1,5 +1,13 @@
 # DEVLOG — Empowr Members
 
+## 2026-07-30 — PostHog route-change tracking fix (fleet-wide)
+
+- `capture_pageview: true` → `'history_change'` in `PostHogProvider.tsx`. posthog-js gates `HistoryAutocapture` on an exact string match, so `true` captures hard page loads only — client-side `<Link>` navigation produced **no pageview at all**. Worth noting for this site specifically: the booking and membership flows are almost entirely client-side navigation, so essentially the whole funnel would have been invisible once real traffic arrives.
+- Found during a full review of Empowr Heroes (11 autocaptured CTA clicks vs 4 pageviews on the destination page). Same config across every Next.js site here — fixed in Heroes, Main Site, EELA, Members, Landing Page, plus the canonical templates in `_config/guides/posthog-consent.md`.
+- `cookieless_mode: 'on_reject'` unchanged — orthogonal to consent.
+- No effect on the 2026-07-30 pre-launch instrumentation work (Variant B events); this makes those events measurable in context rather than changing them.
+- Verified: `npx tsc --noEmit` clean.
+
 ## 2026-07-29 (Launch-gate: legal policy links wired) — spec risk #5 resolved
 
 - **No new Sanity content needed**: queried the CMS directly and confirmed the org privacy policy (platform `org`, v1.2, last updated 2026-07-28) already has a "Programme Bookings" section covering DOB, health/accessibility info, and safeguarding for under-18s, with its own retention table — this generically covers what Members collects since Members is legally the same entity (Empowr CIC), not a separate one. No Members-specific `policy.platform` enum value was added; reuse over duplication.
