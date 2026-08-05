@@ -28,15 +28,27 @@ function base64url(input: Buffer | string): string {
   return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-/** iat is backdated 60s — a freshly-stamped token gets a clock-skew
- *  "Token used before issued" 401 from PassKit; see Step A0. */
+/** iat is backdated a little to absorb forward clock skew — a freshly-stamped
+ *  token can get a "Token used before issued" 401 if our clock runs ahead of
+ *  PassKit's (seen once during Step A0).
+ *
+ *  It must stay WELL under 60s: PassKit rejects any token whose iat is 60s or
+ *  older with `{"error":"jwt was issued too long ago"}`. The original value here
+ *  was exactly 60, which put every call on the rejection boundary and made it a
+ *  latency race — measured 2026-08-05 at 0/12 accepted at 60s vs 12/12 at 10s,
+ *  against a local clock verified accurate to 0.9s. Because every export in this
+ *  module is never-throw, that failed silently as "no pass issued". */
+const JWT_IAT_BACKDATE_SECONDS = 10;
+
 function getJwt(): string {
   const key = process.env.PASSKIT_API_KEY;
   const secret = process.env.PASSKIT_API_SECRET;
   if (!key || !secret) throw new Error("PASSKIT_API_KEY/PASSKIT_API_SECRET is not set");
   const now = Math.floor(Date.now() / 1000);
   const header = base64url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
-  const payload = base64url(JSON.stringify({ uid: key, iat: now - 60, exp: now + 300, web: false }));
+  const payload = base64url(
+    JSON.stringify({ uid: key, iat: now - JWT_IAT_BACKDATE_SECONDS, exp: now + 300, web: false })
+  );
   const signingInput = `${header}.${payload}`;
   const signature = base64url(createHmac("sha256", secret).update(signingInput).digest());
   return `${signingInput}.${signature}`;

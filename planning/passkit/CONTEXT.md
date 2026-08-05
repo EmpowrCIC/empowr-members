@@ -51,6 +51,8 @@ Follow the Phase 1 conventions throughout: writes via service client in API rout
 
 **Orphaned (first attempt, wrong uid — harmless, no delete endpoint found, safe to ignore):** Template `670y5xsYysSx0QGqHwyjOW`, Production `1juRXlbA6zqEEFWNGSIBny`, Ticket Type `0YSfJ5boLqM4lMhR6j8aeB`. A throwaway test venue (`3N7SGGq9s2rOHylbVmV7rY`, uid `test-venue-delete-me`) and test ticket (`6kdTbgff3vX92NLZUSmVoK`) also exist from the end-to-end proof below — both clearly named, safe to leave or delete once a Venue/Ticket delete path is found.
 
+> **⚠️ Superseded in part — read Step A9 before acting on this paragraph.** Verified 2026-08-05: Apple Wallet passes *do* install today (signed under PassKit's shared cert); `passTypeIdentifier` is actually empty on the live object; and the "Google Wallet unaffected" claim is wrong. The real blocker is DRAFT mode's test stamp + 2-day pass expiry.
+
 **Blocked: Apple Wallet passes won't work for real users yet.** `passTypeIdentifier` is set to `pass.com.empowrcic.members` (a real value, chosen now so nothing needs to change later) but Apple requires a paid Apple Developer Program membership to register that Pass Type ID and generate a signing certificate, which then gets uploaded to PassKit against this Production. **As of 2026-07-21, that membership is in progress, not yet confirmed.** Until the cert is uploaded, PassKit rejects `PROJECT_PUBLISHED` status — the Production was created with `status: ["PROJECT_ACTIVE_FOR_OBJECT_CREATION", "PROJECT_DRAFT"]` instead (server error confirmed: status must contain either `PROJECT_DRAFT` or `PROJECT_PUBLISHED`, and `PROJECT_PUBLISHED` alone was rejected as "account not eligible for production use"). **Once the cert is ready: flip Production status to include `PROJECT_PUBLISHED` instead of `PROJECT_DRAFT`** (exact update mechanism — POST to `/eventTickets/production` again with the same `id`, or a dedicated update endpoint — not yet confirmed, treat as a fresh small investigation). Google Wallet is a separate mechanism and should be unaffected by this gap.
 
 **Confirmed REST paths** (base `https://api.pub1.passkit.io`, all POST unless noted):
@@ -121,6 +123,54 @@ Seeded a real venue/offering/occurrence/account/participant/booking directly via
 - **Cleanup**: all seeded Supabase rows (venue, offering, occurrence, participant, booking, credit) and both test auth users deleted, `ADMIN_EMAILS` reverted, temp scripts removed — verified zero leftover rows. Only the harmless orphaned PassKit venue above remains, matching precedent.
 - **Not yet done**: install the pass on a real phone (Apple + Google) — template rendering can't be asserted from code, still worth a manual check post-deploy. Apple Wallet is still blocked on the pending Developer cert regardless.
 - **Deploy**: `PASSKIT_API_KEY`/`PASSKIT_API_SECRET` were already pushed to Netlify at Step A1 — confirm before merging that they're still set (fail-soft means a missing key silently produces zero passes, not an error). Then deploy via git push. Update registries (`third-party-services.md`, `env-vars.md`) if not already current, project memory.md + DEVLOG (done), and the cross-session memory file `project_empowr_members_passkit.md` (done).
+
+### Step A9 — pre-launch verification (2026-08-05) — CORRECTS several Step A2/A8 conclusions
+
+Run as launch prep while the Apple Developer account was still pending. Four findings, two of them corrections to what's written above.
+
+**1. `lib/passkit.ts` was silently broken in production — fixed.** The `iat` backdate was exactly `60`, and PassKit rejects any token whose `iat` is **60s or older** with `{"error":"jwt was issued too long ago"}`. That put every single call on the rejection boundary, decided by network latency. Measured against a local clock verified accurate to 0.9s (compared to PassKit's own `Date` response header): **0/12 accepted at 60s backdate, 12/12 accepted at 10s.** Because every export here is never-throw, this failed silently as "no pass issued" — no error, no alert, nothing in the DB. Now `JWT_IAT_BACKDATE_SECONDS = 10`. **Do not raise it back toward 60.** The Step A0 note above (backdate 60s to fix "Token used before issued") is superseded: a backdate of 0 was also accepted in this run, so that original symptom was transient clock skew, not a standing requirement — a small backdate is insurance against forward skew only.
+
+**2. Apple Wallet is NOT functionally blocked by the missing cert — the Step A2 blocker note is wrong about the mechanism.** Passes issue and install *today*. Verified by downloading the real `.pkpass` and unzipping it: 33KB, complete bundle (icons, logos, `pass.strings`, `manifest.json`) with a **present 3314-byte `signature`**. It is signed under **PassKit's own shared certificate** — `passTypeIdentifier: "pass.io.passkit.dev"`, `teamIdentifier: "SSUX2R6S8X"` — with `organizationName: "Empowr CIC"` correct.
+
+  **What actually blocks launch is DRAFT mode, and it's worse than a missing cert.** Every pass issued while the Production is `PROJECT_DRAFT` carries:
+  - a back-field headed **"Test Pass - Not for Commercial Use"**, whose body reads *"This pass is for testing and demonstration purposes only and will expire automatically two days after issue."*
+  - a hard **2-day expiry** — confirmed: `expirationDate` was exactly issue time + 48h.
+
+  A member booking a session more than two days out would get a pass that expires before the session, stamped "not for commercial use". So passes must stay **off** until the Production is published. The Apple cert is still the gate — it's what unlocks `PROJECT_PUBLISHED` — but the reason is the test-mode stamp and expiry, not pass signing.
+
+**3. "Google Wallet is unaffected by the Apple gap" (Step A2) is wrong.** The install page is UA-aware, but on Android it does **not** hand off to native Google Wallet — it links to `https://walletpass.io?p=passkit&u=<the same .pkpass URL>`, a third-party pkpass reader app. Android therefore serves the **identical `.pkpass`**, and inherits the identical test disclaimer and 2-day expiry. There is no Android path that routes around the DRAFT restriction. (Native Google Wallet would need separate Google issuer configuration on the Production, which does not exist here.)
+
+**4. Three pass-content bugs, all independent of the cert and all fixable now.** `pass.json` addresses fields by key and resolves them through `en.lproj/pass.strings`; reading that mapping shows what a member would actually see:
+  - **`custom.offeringTitle.value` is empty** — this is the pass's *primary field*, the largest text on it, labelled "Session". Our issue payload sends `metaData: { offeringTitle }` but that is not reaching the template field. Needs a template-side check of how `custom.offeringTitle` is sourced.
+  - **`person.displayName.value` is empty** — labelled "Name". We never set `person` on the ticket, so a per-participant pass shows no participant.
+  - **The QR code is broken** — `barcode.message` is the literal string `"missing: ticketNumber"`, with `altText: "Scan at the door"`. We never set `ticketNumber`, so door scanning cannot work.
+
+  All three are settable on the issue request: `IssueTicketRequest` carries `ticketNumber`, `person`, `barcodeContents`, and `metaData` (confirmed in `io/event_tickets/ticket.pb.go`).
+
+**Technique worth reusing: pass rendering CAN be asserted from code.** Step A8 concluded it "can't be asserted from code, still worth a manual check on a real phone". That is not true — `GET https://pub1.pskt.io/{ticketId}.pkpass` returns the real bundle; unzip it and read `pass.json` + `en.lproj/pass.strings` to see exactly what the member sees, no device needed. This is how all three bugs above were found, and it should be the standard check after any template change. A real-device check is still worth doing once for visual/layout confirmation, but it is no longer the only way to catch content faults.
+
+**Live state confirmed this session** (Production `27xx6YlVGWi65uxtO1mNbB`):
+- `status: ["PROJECT_ACTIVE_FOR_OBJECT_CREATION", "PROJECT_DRAFT"]` — unchanged.
+- **`passTypeIdentifier` is `""` (empty)** — the Step A2 claim that it was "set to `pass.com.empowrcic.members`, chosen now so nothing needs to change later" does not hold; the value never persisted on the live object. Expect to set it as part of the cert flow.
+- `POST /certificates/apple/list` returns empty — no Apple certificate uploaded yet.
+- 8 orphaned test venues exist on the account (5 × "Super Arena" from 2026-07-09, 2 × "TEST VENUE - DELETE ME", 1 × "A8 E2E Test Venue"). Harmless but untidy; most cannot be deleted (see Step A8's venue/event reference finding). Production `mem_venues` is empty, so none are real.
+
+### Cert-day runbook (validated endpoints, 2026-08-05)
+
+Found by reading `io/a_rpc_certificates.pb.gw.go` and `io/event_tickets/a_rpc.pb.gw.go` in `github.com/PassKit/passkit-golang-grpc-sdk` — the same gRPC-gateway-source technique used in Step A2. The whole flow is API-driven; none of it needs the PassKit dashboard.
+
+| Step | Call |
+|---|---|
+| 1. Get a CSR from PassKit | `GET /certificate/certificate_signing_request` → returns a PEM `CERTIFICATE REQUEST` body |
+| 2. Register Pass Type ID + upload that CSR at developer.apple.com, download the `.cer` | *(manual, Apple portal)* |
+| 3. Upload the signed cert back | `POST /certificate/apple_certificate` (body type `FileBytes`) |
+| 4. Confirm it landed | `POST /certificates/apple/list`, or `GET /certificate/{passTypeId}` → `CertificateData` (teamId, validFrom/validTo) |
+| 5. Publish the Production | `PATCH /eventTickets/production` (partial) or `PUT /eventTickets/production` (full replace), body includes `id` + `status` |
+| 6. Verify | `GET /eventTickets/production/{id}` shows `PROJECT_PUBLISHED`; then issue one ticket and unzip its `.pkpass` — the "Test Pass" back-field and the 2-day `expirationDate` must both be gone |
+
+**Critical gotcha — do NOT pre-fetch and store the CSR.** `GET /certificate/certificate_signing_request` returns a **different CSR on every call** (verified: two calls 2s apart returned different SHA-256 hashes), i.e. a fresh keypair each time, and PassKit holds the private key. Fetch the CSR only at the moment you are ready to upload it to Apple, and do not call the endpoint again before posting the `.cer` back — a later call may orphan the keypair the certificate was issued against.
+
+**Caveat on step 5**: on the `Production` message, both `status` and `passTypeIdentifier` carry `validateUpdate:"-"`, which may mean the server ignores them on update. If the PATCH/PUT is accepted but `status` doesn't change, publishing likely has to go through the PassKit dashboard instead. Untested — there is nothing to publish against until the cert exists.
 
 ## Track B — pointer only (do not build yet)
 
