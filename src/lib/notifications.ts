@@ -164,6 +164,7 @@ export async function sendBookingConfirmationForSession(
 type PassVenue = { id: string; passkit_venue_id: string | null };
 type PassIssueRow = {
   id: string;
+  participant: { name: string } | null;
   occurrence: {
     starts_at: string;
     ends_at: string;
@@ -181,6 +182,7 @@ type PassIssueRow = {
 
 const PASS_ISSUE_SELECT = `
   id,
+  participant:mem_participants(name),
   occurrence:mem_occurrences(
     starts_at, ends_at,
     venue:mem_venues(id, passkit_venue_id),
@@ -235,6 +237,7 @@ export async function issuePassesForSession(
       const issued = await issueSessionPass({
         bookingId: row.id,
         offeringTitle: offering.title,
+        participantName: row.participant?.name ?? null,
         venueId: venue.id,
         venuePasskitId: venue.passkit_venue_id,
         startsAt,

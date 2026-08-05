@@ -101,6 +101,8 @@ export type IssueSessionPassInput = {
   /** mem_bookings.id — becomes the PassKit ticket uid. */
   bookingId: string;
   offeringTitle: string;
+  /** mem_participants.name — renders in the pass's "Name" field. */
+  participantName: string | null;
   /** mem_venues.id (the PassKit venue's uid) + its passkit_venue_id. */
   venueId: string;
   venuePasskitId: string;
@@ -120,6 +122,16 @@ export async function issueSessionPass(
     const data = await passkitRequest<{ ticketId: string }>("POST", "/eventTickets/ticket/id", {
       uid: input.bookingId,
       ticketType: TICKET_TYPE,
+      // ticketNumber must be unique per production. Using the booking id
+      // makes a repeat issue for the same booking 409 rather than mint a
+      // second pass — a free idempotency guard (the 409 is swallowed below).
+      ticketNumber: input.bookingId,
+      // The template's barcode payload is `${ticketNumber}`, but that
+      // placeholder does NOT resolve from the stored ticketNumber — passes
+      // rendered with a literal "missing: ticketNumber" QR. barcodeContents
+      // overrides the payload directly and does work (verified 2026-08-05 by
+      // unzipping the issued .pkpass). Keep both set.
+      barcodeContents: input.bookingId,
       event: {
         production: PRODUCTION,
         venue: { id: input.venuePasskitId, uid: input.venueId },
@@ -128,6 +140,12 @@ export async function issueSessionPass(
         actualStartDate: input.startsAt,
         endDate: input.endsAt,
       },
+      // Renders in the pass's "Name" field (template field person.displayName).
+      ...(input.participantName ? { person: { displayName: input.participantName } } : {}),
+      // Stored on the ticket but does NOT populate the template's
+      // custom.offeringTitle field — that field is userCanSetValue:false, so
+      // the pass's primary field still renders empty. Kept for traceability;
+      // see planning/passkit/CONTEXT.md Step A9 for the open template fix.
       metaData: { offeringTitle: input.offeringTitle },
       barcode: { format: "QR" },
     });
