@@ -170,8 +170,23 @@ Found by reading `io/a_rpc_certificates.pb.gw.go` and `io/event_tickets/a_rpc.pb
 | 4. Confirm it landed | `POST /certificates/apple/list`, or `GET /certificate/{passTypeId}` → `CertificateData` (teamId, validFrom/validTo) |
 | 5. Publish the Production | `PATCH /eventTickets/production` (partial) or `PUT /eventTickets/production` (full replace), body includes `id` + `status` |
 | 6. Verify | `GET /eventTickets/production/{id}` shows `PROJECT_PUBLISHED`; then issue one ticket and unzip its `.pkpass` — the "Test Pass" back-field and the 2-day `expirationDate` must both be gone |
+| 7. Turn issuance back on | Set `PASSKIT_ENABLED=true` on Netlify (production context). Until this is set, `issueSessionPass()` returns null without calling PassKit — see the kill switch below. **Do step 6 before step 7**, not after |
 
 **Critical gotcha — do NOT pre-fetch and store the CSR.** `GET /certificate/certificate_signing_request` returns a **different CSR on every call** (verified: two calls 2s apart returned different SHA-256 hashes), i.e. a fresh keypair each time, and PassKit holds the private key. Fetch the CSR only at the moment you are ready to upload it to Apple, and do not call the endpoint again before posting the `.cer` back — a later call may orphan the keypair the certificate was issued against.
+
+### Kill switch — `PASSKIT_ENABLED` (added 2026-08-05)
+
+`issueSessionPass()` returns null without calling PassKit unless `process.env.PASSKIT_ENABLED === "true"`. **Off is the default and requires no env var to exist**, so the safe state cannot be lost by someone clearing a variable.
+
+Added because seeding the real catalogue (2026-08-05) gave every `mem_venues` row a real `passkit_venue_id`, which completed the issuance path — from that moment a live booking would have produced a DRAFT-mode pass stamped "Test Pass - Not for Commercial Use" and expiring in 48h. Passes must stay off until the Production is published.
+
+Scope is deliberately narrow — the flag gates **only** issuance:
+- `createPassKitVenue()` is **not** gated. It produces nothing member-facing, and keeping it live means new venues stay wired for the day passes turn on. Gating it would recreate the null-`passkit_venue_id` trap where passes silently never issue for venues added while the flag was off.
+- `voidPass()` is **not** gated. Revoking an already-issued pass must always work, independent of whether new issuance is switched on.
+
+A member's experience with issuance off is a normal booking and confirmation email with no wallet button — `booking-confirmation.ts` already omits the button for any participant without a pass rather than rendering a dead link (Step A6), so nothing degrades.
+
+(The previously-noted zero-code alternative — unsetting `PASSKIT_API_KEY` so `getJwt()` throws into the never-throw wrapper — also works, but logs an error per booking and is easy to undo by accident. The flag was chosen for explicit intent.)
 
 **Caveat on step 5**: on the `Production` message, both `status` and `passTypeIdentifier` carry `validateUpdate:"-"`, which may mean the server ignores them on update. If the PATCH/PUT is accepted but `status` doesn't change, publishing likely has to go through the PassKit dashboard instead. Untested — there is nothing to publish against until the cert exists.
 

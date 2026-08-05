@@ -111,13 +111,40 @@ export type IssueSessionPassInput = {
   endsAt: string;
 };
 
+/** Pass issuance is OFF unless PASSKIT_ENABLED is explicitly "true", so the
+ *  safe state is the default and needs no env var to be set at all.
+ *
+ *  Why: while the PassKit Production sits in PROJECT_DRAFT, every issued pass
+ *  carries a "Test Pass - Not for Commercial Use" back-field AND self-expires
+ *  48h after issue — so a member booking more than two days ahead gets a pass
+ *  that is dead before their session. That is worse than no pass. Turn this on
+ *  only once the Apple cert is uploaded and the Production is PROJECT_PUBLISHED
+ *  (see planning/passkit/CONTEXT.md Step A9 and the cert-day runbook).
+ *
+ *  Deliberately NOT applied to createPassKitVenue() or voidPass():
+ *   - venue creation produces nothing member-facing, and keeping it live means
+ *     venues stay wired for the day passes turn on. Gating it would recreate
+ *     the null-passkit_venue_id trap where passes silently never issue.
+ *   - voiding must always be able to revoke a pass that already exists,
+ *     regardless of whether new issuance is currently switched on. */
+function passIssuanceEnabled(): boolean {
+  return process.env.PASSKIT_ENABLED === "true";
+}
+
 /** Issue one Event Tickets pass for a confirmed booking (one per
  *  participant — see planning/passkit/CONTEXT.md Step A5). Returns the
  *  pass id to persist as mem_bookings.passkit_pass_id plus the wallet
- *  install URL, or null on any failure. */
+ *  install URL, or null on any failure — or null without calling PassKit
+ *  at all when issuance is switched off. */
 export async function issueSessionPass(
   input: IssueSessionPassInput
 ): Promise<{ passId: string; installUrl: string } | null> {
+  if (!passIssuanceEnabled()) {
+    // Logged rather than returned silently: an absent pass should always be
+    // explainable from the logs, since every failure mode here is fail-soft.
+    console.info("PassKit issuance disabled (PASSKIT_ENABLED not 'true')", input.bookingId);
+    return null;
+  }
   try {
     const data = await passkitRequest<{ ticketId: string }>("POST", "/eventTickets/ticket/id", {
       uid: input.bookingId,
