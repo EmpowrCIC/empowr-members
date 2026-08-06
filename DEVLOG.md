@@ -1,5 +1,14 @@
 # DEVLOG — Empowr Members
 
+## 2026-08-06 (session) — Migrations moved out to the shared empowr-cic schema of record
+
+- `src/supabase/migrations/` is **gone from this repo** (7 files). All 22 migrations for the shared `empowr-cic` database now live in `Empowr CIC/supabase/migrations/` in the new `empowr-cic-workspace` repo.
+- Why: this database is shared with Empowr Waivers and the EFN dashboard, and per-app filing meant **no repo could rebuild it** — 7 of the ledger's 22 migrations had no file in any repo at all, including `create_waiver_schema`. This repo's 7 were the best-kept set, but they only ever described a third of the database.
+- Nothing was lost. Supabase stores the full SQL of every applied migration in `supabase_migrations.schema_migrations`, so the files are now **generated** from that ledger by `dump-ledger.mjs`; the SQL was verified identical before deletion.
+- The 22 lines of schema rationale in `members_initial_schema.sql` existed **only here**, because that migration was applied with its comments stripped. They were backfilled into the ledger first (comment-only change, SQL verified unchanged), so the generated copy carries them.
+- Going forward: apply migrations **with their comments included**, and take filenames from the ledger version the server assigns. This repo's files used hand-picked numbers (`20260706190000`) that never matched the real versions (`20260706193547`).
+- Untouched: a pre-existing uncommitted `DEVLOG.md` edit from another session was left alone.
+
 ## 2026-08-05 (session) — PassKit pre-launch verification: found a silent production breakage, corrected two wrong assumptions, mapped the cert-day flow
 
 Ran as launch prep while the Apple Developer account is still pending. Went looking for the `PROJECT_PUBLISHED` flip mechanism and a Google-Wallet-works-today confirmation; found four things instead, two of which change the launch plan.
@@ -16,6 +25,30 @@ Ran as launch prep while the Apple Developer account is still pending. Went look
 - **Cert-day runbook written** (`planning/passkit/CONTEXT.md`) with validated endpoints for the full flow: CSR → Apple → upload cert → publish Production → verify. Key gotcha: **never pre-fetch the CSR** — `GET /certificate/certificate_signing_request` returns a fresh keypair on every call (verified: different hashes 2s apart), so fetching early would orphan the key the Apple cert gets issued against.
 - Also confirmed live: Production `passTypeIdentifier` is empty (contradicting the Step A2 note), no Apple cert uploaded yet, and 8 orphaned test venues on the PassKit account (production `mem_venues` is empty, so none are real).
 - Probe ticket issued for the test was deleted and verified gone (404). Typecheck clean.
+
+**🚨 LAUNCH BLOCKER FOUND: the waiver tables are completely empty — nobody can book anything (same session).** Flipped Skate Jam live to run the live-mode Stripe smoke test, then found `people` = **0 rows** and `waiver_responses` = **0 rows** (`form_versions` has 1 active row). Confirmed via `pg_stat_user_tables` that no other table in the project holds waiver data, and via the registry that Empowr Waivers uses this same project (`qrdlheqnnzpasbnayalm`) — so waiver.empowrcic.org has never persisted a submission here.
+
+`checkWaivers()` fails closed by design: with zero `people` rows nothing can ever match, so **every booking is blocked at the waiver gate**, including the smoke test. Rolled Skate Jam back to `active = false` immediately — verified `/sessions` shows 0 mentions and `/sessions/skate-jam` returns 404 (was 200). **Zero bookings and zero charges occurred** during the few-minute window (`mem_bookings` = 0).
+
+**Open question for Empowr, needed before launch**: either the waiver app isn't actually being used in practice (a process gap), or it is live and silently failing to write (a compliance problem predating this platform — sessions running with no recorded risk waiver or photo consent). Cannot be determined from the data alone.
+
+**Two design findings while investigating** (user asked about absorbing the waiver into Members):
+- **`form_versions.active` is a latent outage.** `checkWaivers()` filters `form_version_id = <active version>`, so publishing *any* new form version instantly un-covers every member who ever signed — a typo fix would block the entire membership from booking, silently and simultaneously. Harmless at 0 rows; a genuine outage at 200 members. Wants a `requires_resign` flag so cosmetic edits don't invalidate everyone.
+- **Waiver coverage is matched by normalised name string** (`skater_names[]` vs `mem_participants.name`), so "Jo Smith" vs "Joseph Smith" fails silently and reads as a bug to the member. Should be ID-linked via the existing `mem_participants.person_id` → `people(id)` FK.
+- On making waivers persistent: `waiver_responses` is per-visit by design (`session_date NOT NULL`, `skating_mode`, `session_id`, `session_policy_type`), so a standing/annual waiver is a **legal-copy change first** (the document text must cover all sessions for a period), schema change second. Absorbing the form into Members is otherwise cheap — same database, FK already present — but waiver.empowrcic.org must survive for walk-ins, who are accepted and are not members.
+
+**🚨 LAUNCH BLOCKER FOUND: the waiver tables are empty — no booking can succeed (same session).** Went to run the live-mode Stripe smoke test, flipped Skate Jam to `active = true` (verified live: rendered at £7/Honor Oak with all 12 Thursdays and per-occurrence book links, while the other three offerings stayed correctly invisible). Then checked the waiver gate before sending the user to a checkout, and found:
+- **`people` = 0 rows, `waiver_responses` = 0 rows**, `form_versions` = 1 (active). Confirmed via `pg_stat_user_tables` that no other table in the project holds this data either.
+- Empowr Waivers uses the **same** Supabase project (`qrdlheqnnzpasbnayalm`, confirmed in `_config/registry/supabase.md`), so waiver.empowrcic.org has never persisted a submission here.
+- `checkWaivers()` **fails closed**: with zero `people` rows nothing can ever match, so **every booking on Members is blocked before Stripe** — the smoke test included. Had I not checked, the user would have been sent to a checkout they could not reach.
+- **Rolled Skate Jam back to `active = false`** and verified: `/sessions` shows 0 mentions, `/sessions/skate-jam` now 404s (was 200), 0 book links. Confirmed **0 bookings** created during the ~minutes-long window (`mem_bookings` still 0 total).
+- **Open question for the user, which changes what we do next**: either the waiver app isn't really in use (people sign on paper / it gets skipped — a process gap), or it is live and silently failing to write (a compliance problem predating today, meaning sessions have run with no recorded risk waiver or photo consent). Cannot be distinguished from the data alone.
+
+**Waiver architecture discussed (no code written).** User asked whether the waiver could be absorbed into Members rather than living at waiver.empowrcic.org, with signatures persisting long-term instead of being re-signed every visit. Assessment:
+- **Absorbing is cheap** — the waiver tables are already in the same Supabase project, and `mem_participants.person_id` already FKs to `people(id)`. No migration or cross-service calls needed. But waiver.empowrcic.org must survive for walk-ins, who are accepted and charged on the door and are not members.
+- **Long-term persistence is a legal-copy change first, schema second.** `waiver_responses` encodes a single visit (`session_date NOT NULL`, `skating_mode`, `session_id`, `session_policy_type`, `roller_disco_policies`) — the document says "for the session on [date]". Its validity can't just be extended; the waiver wording has to become a standing/annual consent before any schema change means anything. That's a LegalHub/policy job and should lead.
+- Technical shape once wording supports it: coverage linked by `mem_participants.id` rather than the current `skater_names[]` **string matching** (today "Jo Smith" vs "Joseph Smith" fails silently and reads as a bug), an explicit 12-month expiry, and adding a participant triggering a top-up rather than a full re-sign.
+- **Landmine flagged regardless of the above**: `checkWaivers()` filters `form_version_id = <active version>`, so publishing *any* new form version instantly un-covers every member who ever signed — a typo fix would block the entire membership from booking at once, silently. Harmless at 0 rows; a real outage at 200 members. Wants a `requires_resign` flag on form versions so cosmetic edits don't invalidate everyone.
 
 **Real catalogue seeded + PassKit issuance gated (same session).** With capacity unblocked, seeded the live catalogue from the Empowr CIC KB: **4 venues, 4 offerings, 51 occurrences** running Mon 10 Aug → Sun 1 Nov 2026. All offerings left `active = false`, so nothing is publicly visible until a deliberate flip.
 - **Capacity 25 set on `mem_venues.default_capacity`, not per-occurrence** — `mem_hold_bookings()` resolves capacity as `coalesce(occurrence.capacity, venue.default_capacity)`, so the interim number lives in 4 rows instead of 51, and per-occurrence stays free as an override slot. Raising to real numbers later is a 4-row update.
@@ -48,21 +81,9 @@ Ran as launch prep while the Apple Developer account is still pending. Went look
 - Verified: `tsc --noEmit` clean, dev server compiles, homepage 200. Not yet verified against real PostHog Live Events — site has zero real traffic pre-launch.
 - Commit `f7c72b2`, pushed to `main`.
 
-## 2026-07-30 — PostHog route-change tracking fix (fleet-wide)
+## 2026-07-30 — PostHog route-change tracking fix (fleet-wide): `capture_pageview: true` → `'history_change'`, since `true` silently captured no client-side `<Link>` navigation at all; fixed across all 5 Next.js sites plus the canonical template
 
-- `capture_pageview: true` → `'history_change'` in `PostHogProvider.tsx`. posthog-js gates `HistoryAutocapture` on an exact string match, so `true` captures hard page loads only — client-side `<Link>` navigation produced **no pageview at all**. Worth noting for this site specifically: the booking and membership flows are almost entirely client-side navigation, so essentially the whole funnel would have been invisible once real traffic arrives.
-- Found during a full review of Empowr Heroes (11 autocaptured CTA clicks vs 4 pageviews on the destination page). Same config across every Next.js site here — fixed in Heroes, Main Site, EELA, Members, Landing Page, plus the canonical templates in `_config/guides/posthog-consent.md`.
-- `cookieless_mode: 'on_reject'` unchanged — orthogonal to consent.
-- No effect on the 2026-07-30 pre-launch instrumentation work (Variant B events); this makes those events measurable in context rather than changing them.
-- Verified: `npx tsc --noEmit` clean.
-
-## 2026-07-29 (Launch-gate: legal policy links wired) — spec risk #5 resolved
-
-- **No new Sanity content needed**: queried the CMS directly and confirmed the org privacy policy (platform `org`, v1.2, last updated 2026-07-28) already has a "Programme Bookings" section covering DOB, health/accessibility info, and safeguarding for under-18s, with its own retention table — this generically covers what Members collects since Members is legally the same entity (Empowr CIC), not a separate one. No Members-specific `policy.platform` enum value was added; reuse over duplication.
-- **Wired into the live site** (previously zero legal links existed anywhere in the app — verified via grep): added the same `/legal/:slug` → `https://legalhub.pecuvate.com/share/empowr/org/:slug` Netlify redirect proxy that Main Site already uses (netlify.toml), added `privacyPolicy`/`termsAndConditions`/`riskWaiver` entries to `lib/links.ts`, built a new `Footer.tsx`, mounted it once in the root `layout.tsx` so it covers every route group (public/member/admin/auth) without touching each nested layout individually.
-- Verified: clean `next build` (typecheck + lint + all 17 routes), and confirmed `legalhub.pecuvate.com/share/empowr/org/privacy-policy` returns 200 live.
-- **Checked the live-mode Stripe smoke test next and found it can't run yet**: queried production Supabase directly — `mem_venues`/`mem_offerings`/`mem_occurrences`/`mem_course_runs` are all empty (0 rows). Same Q6/Jasmine real-timetable gap as Step 3, not a new issue. Also found a leftover `mem_accounts` row from the 2026-07-21 PassKit A8 e2e session that the DEVLOG at the time claimed was fully cleaned up ("zero leftover rows verified") — it wasn't. **User decision**: defer the smoke test until real seeding happens (no throwaway test listing on the live site); leave the leftover account row as-is for now.
-- Registries update still outstanding.
+## 2026-07-29 (Launch-gate: legal policy links wired) — spec risk #5 resolved: reused the existing org privacy policy rather than adding a Members-specific one, added the `/legal/:slug` LegalHub proxy + a root-mounted `Footer.tsx` (the app had zero legal links before); live Stripe smoke test deferred — catalogue tables still empty
 
 ## 2026-07-21 (PassKit Track A — Step A8: live e2e proof passed, deployed — Track A COMPLETE) — self-signed a real Stripe webhook event end-to-end: pass issued + `passkit_pass_id` persisted, confirmation email wallet link verified via Gmail MCP, admin occurrence-cancel voided the pass (ticket 404s after); zero leftover rows after cleanup; deployed (commit `6d8f6b5`). Track A fully built/e2e-proven/deployed; still open: install a pass on a real phone, Apple Wallet blocked on Developer cert, Track B blocked on Phase 2
 
