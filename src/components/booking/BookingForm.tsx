@@ -7,10 +7,8 @@
 // Checkout URL — the redirect is the final step; the webhook confirms.
 import { useState } from "react";
 import Link from "next/link";
-import { ExternalLink } from "lucide-react";
 import { Button, FormNotice } from "@/components/ui/form";
 import { formatPrice } from "@/lib/format";
-import { links } from "@/lib/links";
 
 export type BookingFormParticipant = {
   id: string;
@@ -146,14 +144,9 @@ export function BookingForm({
             {unsigned.length === 1 ? "needs" : "need"} a signed waiver before
             booking.
           </span>
-          <a
-            href={links.waivers}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-1 inline-flex items-center gap-1 underline"
-          >
-            Complete the waiver <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-          </a>{" "}
+          <Link href="/waiver" className="mt-1 inline-flex underline">
+            Complete the waiver
+          </Link>{" "}
           <span>— then try again below.</span>
         </FormNotice>
       )}

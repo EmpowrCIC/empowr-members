@@ -38,6 +38,37 @@ export const participantSchema = z.object({
     .or(z.literal("").transform(() => null)),
 });
 
+// In-app waiver (Phase 1). Only captures what Members doesn't already
+// hold — the signer, the participant names and whether any are minors are
+// all derived server-side from the account and mem_participants, so this
+// form is two steps rather than the standalone form's four.
+const requiredConsent = (message: string) =>
+  z.boolean().refine((v) => v === true, { message });
+
+export const waiverSchema = z.object({
+  participant_ids: z
+    .array(z.string().uuid())
+    .min(1, "Choose at least one person this waiver covers")
+    .max(20, "Too many people in one waiver"),
+  emergency_contact_name: z
+    .string()
+    .trim()
+    .min(1, "Enter an emergency contact name")
+    .max(200),
+  emergency_contact_phone: phone,
+  emergency_contact_relationship: z
+    .string()
+    .trim()
+    .min(1, "Enter how they're related")
+    .max(100),
+  agreed_tc: requiredConsent("You need to accept the terms and conditions"),
+  agreed_waiver: requiredConsent("You need to accept the risk waiver"),
+  // Photo consent is genuinely optional — it must be recordable as false.
+  agreed_photo: z.boolean(),
+  // Only meaningful when the waiver covers a minor; null otherwise.
+  consent_unaccompanied_departure: z.boolean().nullable(),
+});
+
 export const signupSchema = z.object({
   name: z.string().trim().min(1, "Enter your name").max(200),
   email: z.string().trim().email("Enter a valid email address"),
@@ -149,6 +180,7 @@ export type SignupInput = z.infer<typeof signupSchema>;
 export type PasswordLoginInput = z.infer<typeof passwordLoginSchema>;
 export type MagicLinkInput = z.infer<typeof magicLinkSchema>;
 export type BookingInput = z.infer<typeof bookingSchema>;
+export type WaiverInput = z.infer<typeof waiverSchema>;
 export type VenueInput = z.infer<typeof venueSchema>;
 export type OfferingInput = z.infer<typeof offeringSchema>;
 export type OccurrenceInput = z.infer<typeof occurrenceSchema>;
