@@ -174,7 +174,7 @@ export async function submitWaiver(
   // straight from the request body.
   const { data: participantRows, error: participantsError } = await service
     .from("mem_participants")
-    .select("id, name, dob, emergency_contact_name, emergency_contact_phone")
+    .select("id, name, dob")
     .in("id", input.participantIds)
     .eq("account_id", input.accountId);
   if (participantsError) {
@@ -270,24 +270,13 @@ export async function submitWaiver(
     console.error("waiver: participant person_id link failed", person.id, linkError);
   }
 
-  // Backfill emergency contact onto any participant missing one, so the
-  // account stops asking for details it has just been given.
-  const missingContact = participants
-    .filter((p) => !p.emergency_contact_name || !p.emergency_contact_phone)
-    .map((p) => p.id);
-  if (missingContact.length > 0) {
-    const { error: contactError } = await service
-      .from("mem_participants")
-      .update({
-        emergency_contact_name: input.emergencyContactName,
-        emergency_contact_phone: input.emergencyContactPhone,
-      })
-      .in("id", missingContact)
-      .eq("account_id", input.accountId);
-    if (contactError) {
-      console.error("waiver: emergency contact backfill failed", contactError);
-    }
-  }
+  // Deliberately does NOT copy the emergency contact onto mem_participants.
+  // The standalone waiver form tells signers, in as many words, "Required
+  // each time they attend — contact numbers are not stored on file". Writing
+  // waiver-collected contact details into participant records would
+  // contradict that notice. Members does hold emergency contact fields on
+  // mem_participants, but those are volunteered separately in the account
+  // area; the two must not be silently merged. See planning/waiver/CONTEXT.md.
 
   return { ok: true, personId: person.id, covered: participants.length };
 }

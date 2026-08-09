@@ -61,10 +61,14 @@ export const waiverSchema = z.object({
     .trim()
     .min(1, "Enter how they're related")
     .max(100),
-  agreed_tc: requiredConsent("You need to accept the terms and conditions"),
-  agreed_waiver: requiredConsent("You need to accept the risk waiver"),
-  // Photo consent is genuinely optional — it must be recordable as false.
-  agreed_photo: z.boolean(),
+  // All three consents are required, and the messages are the standalone
+  // form's verbatim (Empowr-Waivers WaiverForm.tsx validateStep step 3) so
+  // the two surfaces cannot drift apart. NOTE: photo consent being
+  // mandatory is inherited from that form deliberately, not by oversight —
+  // see the note in planning/waiver/CONTEXT.md before changing it.
+  agreed_tc: requiredConsent("You must agree to the terms and conditions."),
+  agreed_waiver: requiredConsent("You must agree to the risk waiver."),
+  agreed_photo: requiredConsent("Consent to photo and filming is required."),
   // Only meaningful when the waiver covers a minor; null otherwise.
   consent_unaccompanied_departure: z.boolean().nullable(),
 });

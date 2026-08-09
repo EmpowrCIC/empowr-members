@@ -25,6 +25,61 @@ export type WaiverFormParticipant = {
   alreadySigned: boolean;
 };
 
+// All copy below is verbatim from the standalone waiver form
+// (Empowr-Waivers StepAgreements.tsx CARDS), so the two surfaces present
+// the same agreements in the same words. All three are required there and
+// here — including photo consent.
+type AgreementKey = "agreed_tc" | "agreed_waiver" | "agreed_photo";
+
+const AGREEMENTS: {
+  key: AgreementKey;
+  title: string;
+  sub: string;
+  linkLabel: string;
+  linkHref: string;
+}[] = [
+  {
+    key: "agreed_tc",
+    title: "Terms and conditions",
+    sub: "You must read and agree to Empowr CIC's terms before participating.",
+    linkLabel: "View T&Cs",
+    linkHref: links.termsAndConditions,
+  },
+  {
+    key: "agreed_waiver",
+    title: "Risk waiver",
+    sub: "Acknowledge the risks involved and waive liability as outlined.",
+    linkLabel: "View risk waiver",
+    linkHref: links.riskWaiver,
+  },
+  {
+    key: "agreed_photo",
+    title: "Photo & filming consent",
+    sub: "Permission for Empowr CIC to use photos or video taken during your session.",
+    linkLabel: "View consent form",
+    linkHref: links.photographyConsent,
+  },
+];
+
+const AGREEMENT_TOGGLE_LABEL: Record<AgreementKey, string> = {
+  agreed_tc: "I agree to the terms and conditions",
+  agreed_waiver: "I agree to the risk waiver",
+  agreed_photo: "I consent to photo and filming",
+};
+
+// Verbatim from the standalone waiver form (Empowr-Waivers StepSkating.tsx),
+// so both surfaces record the same set of values.
+const EC_RELATIONSHIPS = [
+  "Parent",
+  "Guardian",
+  "Grandparent",
+  "Sibling",
+  "Carer",
+  "Coach",
+  "Friend",
+  "Other",
+] as const;
+
 export function WaiverForm({
   participants,
   defaultEmergencyContact,
@@ -146,115 +201,114 @@ export function WaiverForm({
         <div className="mt-3 space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <Label htmlFor="waiver-ec-name">Name</Label>
+              <Label htmlFor="waiver-ec-name">Contact full name</Label>
               <Input
                 id="waiver-ec-name"
                 autoComplete="name"
                 className="mt-1"
+                placeholder="e.g. Sarah Johnson"
                 {...register("emergency_contact_name")}
               />
               <FieldError message={errors.emergency_contact_name?.message} />
             </div>
             <div>
-              <Label htmlFor="waiver-ec-phone">Phone</Label>
+              <Label htmlFor="waiver-ec-phone">Contact number</Label>
               <Input
                 id="waiver-ec-phone"
                 type="tel"
                 autoComplete="tel"
                 className="mt-1"
+                placeholder="e.g. 07700 900000"
                 {...register("emergency_contact_phone")}
               />
               <FieldError message={errors.emergency_contact_phone?.message} />
             </div>
           </div>
           <div>
-            <Label htmlFor="waiver-ec-rel">Relationship</Label>
-            <Input
+            <Label htmlFor="waiver-ec-rel">Relationship to skater(s)</Label>
+            {/* Same fixed option list as the standalone form, so the two
+                surfaces produce comparable data rather than free text. */}
+            <select
               id="waiver-ec-rel"
-              className="mt-1"
-              placeholder="e.g. Parent, partner, friend"
+              className="mt-1 w-full rounded-lg border border-line bg-white px-3 py-2 text-black"
               {...register("emergency_contact_relationship")}
-            />
+            >
+              <option value="">— Select relationship —</option>
+              {EC_RELATIONSHIPS.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
             <FieldError
               message={errors.emergency_contact_relationship?.message}
             />
           </div>
+          {coversMinor && (
+            <p className="text-sm text-muted">
+              Required if the child is left unattended in the care of Empowr CIC.
+            </p>
+          )}
         </div>
       </fieldset>
 
-      <fieldset>
-        <legend className="font-extrabold text-black">Agreements</legend>
-        <div className="mt-3 space-y-3">
-          <label className="flex items-start gap-2.5 text-sm font-semibold text-mid">
+      {coversMinor && (
+        <fieldset>
+          <legend className="font-extrabold text-black">
+            Leaving after the session
+          </legend>
+          <p className="mt-2 rounded-lg bg-blue-pale px-3.5 py-2.5 text-sm leading-relaxed text-blue-dark">
+            By default, under-18 skaters must be collected by a parent/guardian
+            or the named emergency contact at the end of the session. Only turn
+            this on if you give permission for them to leave the venue by
+            themselves, unaccompanied, once the session ends.
+          </p>
+          <label className="mt-3 flex items-start gap-2.5 text-sm font-semibold text-mid">
             <input
               type="checkbox"
               className="mt-0.5 h-4 w-4 accent-blue"
-              {...register("agreed_tc")}
+              {...register("consent_unaccompanied_departure")}
             />
             <span>
-              I accept the{" "}
-              <a
-                href={links.termsAndConditions}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline"
-              >
-                terms and conditions
-              </a>
-              , including that bookings are non-refundable.
-            </span>
-          </label>
-          <FieldError message={errors.agreed_tc?.message} />
-
-          <label className="flex items-start gap-2.5 text-sm font-semibold text-mid">
-            <input
-              type="checkbox"
-              className="mt-0.5 h-4 w-4 accent-blue"
-              {...register("agreed_waiver")}
-            />
-            <span>
-              I have read and accept the{" "}
-              <a
-                href={links.riskWaiver}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline"
-              >
-                risk waiver
-              </a>
-              , and confirm everyone listed above is fit to take part.
-            </span>
-          </label>
-          <FieldError message={errors.agreed_waiver?.message} />
-
-          <label className="flex items-start gap-2.5 text-sm font-semibold text-mid">
-            <input
-              type="checkbox"
-              className="mt-0.5 h-4 w-4 accent-blue"
-              {...register("agreed_photo")}
-            />
-            <span>
-              I consent to photos and video being used to promote Empowr CIC.{" "}
-              <span className="text-muted">(Optional — you can leave this unticked.)</span>
-            </span>
-          </label>
-
-          {coversMinor && (
-            <label className="flex items-start gap-2.5 text-sm font-semibold text-mid">
-              <input
-                type="checkbox"
-                className="mt-0.5 h-4 w-4 accent-blue"
-                {...register("consent_unaccompanied_departure")}
-              />
-              <span>
-                I consent to my child leaving the venue unaccompanied at the end
-                of a session.{" "}
-                <span className="text-muted">
-                  (Optional — leave unticked if they must be collected.)
-                </span>
+              <span className="block font-bold text-black">
+                Permission to leave unaccompanied
               </span>
-            </label>
-          )}
+              I give permission for the child to go home by themselves
+            </span>
+          </label>
+        </fieldset>
+      )}
+
+      <fieldset>
+        <legend className="font-extrabold text-black">
+          Terms, waivers &amp; consent
+        </legend>
+        <div className="mt-3 space-y-4">
+          {AGREEMENTS.map(({ key, title, sub, linkLabel, linkHref }) => (
+            <div key={key} className="rounded-xl border border-line p-4">
+              <p className="font-bold text-black">
+                {title} <span className="text-red">*</span>
+              </p>
+              <p className="mt-0.5 text-sm leading-relaxed text-muted">{sub}</p>
+              <a
+                href={linkHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1.5 inline-block text-sm text-blue underline"
+              >
+                ↗ {linkLabel}
+              </a>
+              <label className="mt-3 flex items-start gap-2.5 border-t border-line pt-2.5 text-sm font-semibold text-mid">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 accent-blue"
+                  {...register(key)}
+                />
+                <span>{AGREEMENT_TOGGLE_LABEL[key]}</span>
+              </label>
+              <FieldError message={errors[key]?.message} />
+            </div>
+          ))}
         </div>
       </fieldset>
 
