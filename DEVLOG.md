@@ -1,5 +1,9 @@
 # DEVLOG — Empowr Members
 
+## 2026-08-14
+
+- Added a `## Skills and Tools Available` section to `CLAUDE.md`, closing a scheduled mwp-health M8 finding — README.md already existed and needed no changes
+
 ## 2026-08-10 — Retention blocker cleared at the database: the purge now keys on session_date, and a latent FK would have killed the job entirely
 
 The blocker recorded below is fixed. Migration `20260810114838_waiver_retention_by_session_date` is applied to the shared `empowr-cic` project and committed to **`empowr-cic-workspace`** (`Empowr CIC/supabase/migrations/`) — not here, per the 2026-08-06 schema-of-record split.
@@ -36,14 +40,7 @@ The blocker recorded below is fixed. Migration `20260810114838_waiver_retention_
 - **Deliberate limitation carried forward**: `session_date` is `NOT NULL` and means "the session being attended", so an account-level waiver records the signing date. Making it nullable belongs with Phase 2 — which needs the waiver **wording** changed to a standing/annual consent first. A document saying "for the session on [date]" cannot have its validity extended by a schema change.
 - Catalogue remains fully seeded and **all four offerings deliberately `active = false`**. Don't flip until PR #1 lands.
 
-## 2026-08-06 (session) — Migrations moved out to the shared empowr-cic schema of record
-
-- `src/supabase/migrations/` is **gone from this repo** (7 files). All 22 migrations for the shared `empowr-cic` database now live in `Empowr CIC/supabase/migrations/` in the new `empowr-cic-workspace` repo.
-- Why: this database is shared with Empowr Waivers and the EFN dashboard, and per-app filing meant **no repo could rebuild it** — 7 of the ledger's 22 migrations had no file in any repo at all, including `create_waiver_schema`. This repo's 7 were the best-kept set, but they only ever described a third of the database.
-- Nothing was lost. Supabase stores the full SQL of every applied migration in `supabase_migrations.schema_migrations`, so the files are now **generated** from that ledger by `dump-ledger.mjs`; the SQL was verified identical before deletion.
-- The 22 lines of schema rationale in `members_initial_schema.sql` existed **only here**, because that migration was applied with its comments stripped. They were backfilled into the ledger first (comment-only change, SQL verified unchanged), so the generated copy carries them.
-- Going forward: apply migrations **with their comments included**, and take filenames from the ledger version the server assigns. This repo's files used hand-picked numbers (`20260706190000`) that never matched the real versions (`20260706193547`).
-- Untouched: a pre-existing uncommitted `DEVLOG.md` edit from another session was left alone.
+## 2026-08-06 — Migrations moved out of this repo to the shared `empowr-cic-workspace` schema of record; all 22 migrations now generated from the Supabase migration ledger via `dump-ledger.mjs`
 
 ## 2026-08-05 (session) — PassKit pre-launch verification: found `lib/passkit.ts` silently broken in production (JWT `iat` on PassKit's 60s rejection boundary, 0/12 accepted), disproved "Apple blocked by cert" (real blocker is DRAFT mode's 48h expiry) and "Google Wallet unaffected", fixed a broken QR and empty name field, and wrote the cert-day runbook
 ## 2026-07-30 (session) — KB timetable investigation: KB held usable schedule data, and capacity was named the last seeding blocker — CORRECTED 2026-08-05, capacity is nullable and NULL means unlimited, so seeding was never actually blocked
