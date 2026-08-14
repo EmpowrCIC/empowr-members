@@ -64,3 +64,17 @@ This file is the map. Workspace detail lives in each CONTEXT.md.
 - /esign — e-signature integration (waivers are handled by the existing Empowr Waivers app, not in-project)
 - /audit-mwp — check MWP structure compliance
 - /update-mwp — update MWP files when the project evolves
+
+## Skills and Tools Available
+
+| Tool / Skill | Trigger | Purpose |
+|---|---|---|
+| `/netlify-deploy` | going live | Deploy to Netlify and wire up `members.empowrcic.org` |
+| `/netlify-supabase-check` | before going live | Audit Netlify + Supabase integration |
+| `/webapp-testing` | after frontend changes | Test UI in a browser with Playwright |
+| `/init-brand` | once, before first deploy | Set up favicons, manifest, and brand assets |
+| `/pre-deploy-security` | before any deploy | Security hygiene check |
+| `/ses-email` | if migrating off Resend | Wire up transactional email via AWS SES |
+| `/esign` | not used in this project | Waivers are handled by the separate Empowr Waivers app |
+| `/audit-mwp` | after structural changes | Check MWP structure compliance |
+| `/update-mwp` | when the project evolves | Update MWP files |
