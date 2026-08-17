@@ -42,7 +42,6 @@ export async function POST(request: Request) {
     emergencyContactPhone: parsed.data.emergency_contact_phone,
     emergencyContactRelationship: parsed.data.emergency_contact_relationship,
     agreedPhoto: parsed.data.agreed_photo,
-    consentUnaccompaniedDeparture: parsed.data.consent_unaccompanied_departure,
   });
 
   if (!result.ok) {

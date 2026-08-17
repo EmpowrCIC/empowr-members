@@ -10,6 +10,22 @@ const phone = z
   .regex(/^\+?[\d\s()-]{7,20}$/, "Enter a valid phone number")
   .refine((v) => (v.match(/\d/g)?.length ?? 0) >= 7, "Enter a valid phone number");
 
+// Same value set as the standalone waiver.empowrcic.org departure-consent
+// step, since both write into the same Waivers-owned departure_consents
+// table (see departureConsentEntrySchema below). Kept as two arrays (not
+// one filtered at runtime) so both stay valid literal tuples for z.enum();
+// DEFAULT_TRAVEL_METHODS must stay TRAVEL_METHODS minus "other" — a stored
+// default needs to stand alone without the free-text travel_method_other
+// description "other" requires.
+export const DEFAULT_TRAVEL_METHODS = [
+  "walk_alone",
+  "public_transport",
+  "meet_adult_offsite",
+  "with_sibling",
+  "collected_by_other",
+] as const;
+export const TRAVEL_METHODS = [...DEFAULT_TRAVEL_METHODS, "other"] as const;
+
 export const profileSchema = z.object({
   name: z.string().trim().min(1, "Enter your name").max(200),
   phone: phone.nullable().or(z.literal("").transform(() => null)),
@@ -36,6 +52,14 @@ export const participantSchema = z.object({
     .max(2000)
     .nullable()
     .or(z.literal("").transform(() => null)),
+  // Pre-fill for the per-booking departure consent toggle. No "" ->  null
+  // transform here (unlike the plain-string fields above) — z.enum's input
+  // type is a literal union, not plain string, so a literal("") branch
+  // wouldn't collapse away and would desync zodResolver's input type from
+  // ParticipantInput (the output type useForm is pinned to). The empty
+  // <option> in ParticipantForm is coerced to null via register()'s
+  // setValueAs instead, so zod only ever sees enum | null.
+  default_travel_method: z.enum(DEFAULT_TRAVEL_METHODS).nullable(),
 });
 
 // In-app waiver (Phase 1). Only captures what Members doesn't already
@@ -69,9 +93,38 @@ export const waiverSchema = z.object({
   agreed_tc: requiredConsent("You must agree to the terms and conditions."),
   agreed_waiver: requiredConsent("You must agree to the risk waiver."),
   agreed_photo: requiredConsent("Consent to photo and filming is required."),
-  // Only meaningful when the waiver covers a minor; null otherwise.
-  consent_unaccompanied_departure: z.boolean().nullable(),
 });
+
+// Per-booking departure consent (2026-08-10 decision): unlike the waiver
+// itself, this is asked fresh at every booking rather than signed once —
+// a parent's judgement on whether a child can leave unaccompanied can
+// reasonably differ session to session. TRAVEL_METHODS is defined above,
+// alongside DEFAULT_TRAVEL_METHODS. Same value set and confirm_* checklist
+// as the standalone waiver.empowrcic.org departure-consent step, since
+// both write into the same Waivers-owned departure_consents table.
+const requiredConfirm = (message: string) =>
+  z.boolean().refine((v) => v === true, { message });
+
+export const departureConsentEntrySchema = z
+  .object({
+    participant_id: z.string().uuid(),
+    travel_method: z.enum(TRAVEL_METHODS),
+    travel_method_other: z
+      .string()
+      .trim()
+      .max(200)
+      .nullable()
+      .or(z.literal("").transform(() => null)),
+    confirm_mature: requiredConfirm("Confirm the child is mature enough to leave unaccompanied."),
+    confirm_knows_route: requiredConfirm("Confirm the child knows their route home."),
+    confirm_will_inform_staff: requiredConfirm("Confirm you'll inform staff before they leave."),
+    confirm_accepts_responsibility: requiredConfirm("Confirm you accept responsibility once they leave."),
+    confirm_understands_staff_override: requiredConfirm("Confirm you understand staff can refuse to let them leave."),
+  })
+  .refine(
+    (d) => d.travel_method !== "other" || !!d.travel_method_other,
+    { message: "Describe the travel arrangement", path: ["travel_method_other"] }
+  );
 
 export const signupSchema = z.object({
   name: z.string().trim().min(1, "Enter your name").max(200),
@@ -96,6 +149,10 @@ export const bookingSchema = z
       .array(z.string().uuid())
       .min(1, "Choose at least one participant")
       .max(10, "Too many participants in one booking"),
+    // Optional — most bookings carry none (child is collected in person).
+    // Only present for participants whose "leaving unaccompanied" toggle
+    // was switched on for this specific booking.
+    departure_consents: z.array(departureConsentEntrySchema).default([]),
   })
   .refine(
     (d) => (d.occurrence_id === undefined) !== (d.course_run_id === undefined),
@@ -185,6 +242,7 @@ export type PasswordLoginInput = z.infer<typeof passwordLoginSchema>;
 export type MagicLinkInput = z.infer<typeof magicLinkSchema>;
 export type BookingInput = z.infer<typeof bookingSchema>;
 export type WaiverInput = z.infer<typeof waiverSchema>;
+export type DepartureConsentEntry = z.infer<typeof departureConsentEntrySchema>;
 export type VenueInput = z.infer<typeof venueSchema>;
 export type OfferingInput = z.infer<typeof offeringSchema>;
 export type OccurrenceInput = z.infer<typeof occurrenceSchema>;

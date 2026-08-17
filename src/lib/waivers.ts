@@ -1,16 +1,21 @@
-// Waiver gate — checks against the Empowr Waivers tables (people /
-// waiver_responses / form_versions — service-role only, no RLS
-// policies). Strategy per business rule WAIVER_LINK_STRATEGY:
-// the account email matches the signer's `people` row; a participant
-// is covered when a response on the ACTIVE form version lists their
-// normalised name in skater_names (or it's the signer booking
-// themselves). An already-linked person_id (from a previous match or
-// an admin manual link) is trusted directly.
+// Waiver gate. Primary check is mem_waiver_consents (Members-owned,
+// decoupled from Waivers' own retention policy and form-version bumps —
+// see the 2026-08-17 migration notes). A participant with no live consent
+// row falls back to matching the Empowr Waivers tables directly (people /
+// waiver_responses / form_versions — service-role only, no RLS policies):
+// the account email matches the signer's `people` row; a participant is
+// covered when a response on the ACTIVE form version lists their
+// normalised name in skater_names (or it's the signer booking themselves).
+// This fallback is what recognises someone who signed on the standalone
+// waiver.empowrcic.org app before ever having a consent row here. A
+// fallback match returns enough to backfill a consent row (see
+// recordWaiverConsent below) so the next check takes the fast primary path.
 //
-// submitWaiver() below is the write path (Phase 1) — the same tables
-// the standalone app at waiver.empowrcic.org writes to. That app stays
-// the public route for walk-ins, who are not members and have no
-// account here; this is the in-app equivalent for members.
+// submitWaiver() below is the write path (Phase 1) — the same
+// people/waiver_responses tables the standalone app at waiver.empowrcic.org
+// writes to. That app stays the public route for walk-ins, who are not
+// members and have no account here; this is the in-app equivalent for
+// members.
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/service";
 import { ageOn } from "@/lib/age";
@@ -19,8 +24,14 @@ import type { Participant } from "@/lib/types";
 export type WaiverStatus = {
   participantId: string;
   signed: boolean;
-  /** people.id to persist onto mem_participants when newly matched. */
+  /** people.id to persist onto mem_participants when newly matched via the
+   *  fallback path. Null when already linked or not signed. */
   matchedPersonId: string | null;
+  /** Set alongside a fallback match: the waiver_responses row that
+   *  justified it, so the caller can backfill a mem_waiver_consents row
+   *  via recordWaiverConsent(). Null when covered by an existing consent
+   *  row already, or not signed. */
+  backfillFromResponseId: string | null;
 };
 
 function normaliseName(name: string): string {
@@ -28,14 +39,41 @@ function normaliseName(name: string): string {
 }
 
 type SignerRow = { id: string; first_name: string; last_name: string };
-type ResponseRow = { person_id: string; skater_names: string[] | null };
+type ResponseRow = { id: string; person_id: string; skater_names: string[] | null };
 
-/** Check every participant against the active waiver form version. */
+function unsignedStatus(participantId: string): WaiverStatus {
+  return { participantId, signed: false, matchedPersonId: null, backfillFromResponseId: null };
+}
+
+/** Check every participant against mem_waiver_consents first, then the
+ *  active waiver form version as a fallback. */
 export async function checkWaivers(
   accountEmail: string,
   participants: Pick<Participant, "id" | "name" | "person_id">[]
 ): Promise<WaiverStatus[]> {
   const service = createServiceClient();
+
+  const { data: consents, error: consentsError } = await service
+    .from("mem_waiver_consents")
+    .select("participant_id")
+    .in("participant_id", participants.map((p) => p.id))
+    .is("revoked_at", null)
+    .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`);
+  if (consentsError) {
+    console.error("mem_waiver_consents read failed", consentsError);
+  }
+  const consentedIds = new Set((consents ?? []).map((c) => c.participant_id as string));
+
+  const covered: WaiverStatus[] = participants
+    .filter((p) => consentedIds.has(p.id))
+    .map((p) => ({
+      participantId: p.id,
+      signed: true,
+      matchedPersonId: null,
+      backfillFromResponseId: null,
+    }));
+  const remaining = participants.filter((p) => !consentedIds.has(p.id));
+  if (remaining.length === 0) return covered;
 
   const { data: activeVersion, error: versionError } = await service
     .from("form_versions")
@@ -43,21 +81,10 @@ export async function checkWaivers(
     .eq("active", true)
     .limit(1)
     .maybeSingle();
-  if (versionError) {
-    console.error("waiver form_versions read failed", versionError);
-    return participants.map((p) => ({
-      participantId: p.id,
-      signed: false,
-      matchedPersonId: null,
-    }));
-  }
-  if (!activeVersion) {
+  if (versionError) console.error("waiver form_versions read failed", versionError);
+  if (versionError || !activeVersion) {
     // No active form version — nothing can be signed against; fail closed.
-    return participants.map((p) => ({
-      participantId: p.id,
-      signed: false,
-      matchedPersonId: null,
-    }));
+    return [...covered, ...remaining.map((p) => unsignedStatus(p.id))];
   }
 
   // Signers matched by the account holder's email (case-insensitive).
@@ -68,30 +95,33 @@ export async function checkWaivers(
   const signerRows = (signers ?? []) as SignerRow[];
 
   const personIds = new Set<string>(signerRows.map((s) => s.id));
-  for (const p of participants) {
+  for (const p of remaining) {
     if (p.person_id) personIds.add(p.person_id);
   }
   if (personIds.size === 0) {
-    return participants.map((p) => ({
-      participantId: p.id,
-      signed: false,
-      matchedPersonId: null,
-    }));
+    return [...covered, ...remaining.map((p) => unsignedStatus(p.id))];
   }
 
   const { data: responses } = await service
     .from("waiver_responses")
-    .select("person_id, skater_names")
+    .select("id, person_id, skater_names")
     .in("person_id", [...personIds])
     .eq("form_version_id", activeVersion.id);
   const responseRows = (responses ?? []) as ResponseRow[];
 
   const respondedPersonIds = new Set(responseRows.map((r) => r.person_id));
 
-  return participants.map((p) => {
-    // Already linked (previous match or admin manual link) — trust it.
+  const fallback: WaiverStatus[] = remaining.map((p) => {
+    // Already linked (previous match or admin manual link) — trust it,
+    // just backfill the consent row since it's missing one.
     if (p.person_id && respondedPersonIds.has(p.person_id)) {
-      return { participantId: p.id, signed: true, matchedPersonId: null };
+      const response = responseRows.find((r) => r.person_id === p.person_id)!;
+      return {
+        participantId: p.id,
+        signed: true,
+        matchedPersonId: null,
+        backfillFromResponseId: response.id,
+      };
     }
 
     const name = normaliseName(p.name);
@@ -103,7 +133,13 @@ export async function checkWaivers(
         normaliseName(`${s.first_name} ${s.last_name}`) === name
     );
     if (selfSigner) {
-      return { participantId: p.id, signed: true, matchedPersonId: selfSigner.id };
+      const response = responseRows.find((r) => r.person_id === selfSigner.id)!;
+      return {
+        participantId: p.id,
+        signed: true,
+        matchedPersonId: selfSigner.id,
+        backfillFromResponseId: response.id,
+      };
     }
 
     // Named skater on one of the signer's active-version responses.
@@ -113,11 +149,39 @@ export async function checkWaivers(
         (r.skater_names ?? []).some((n) => normaliseName(n) === name)
     );
     if (covering) {
-      return { participantId: p.id, signed: true, matchedPersonId: covering.person_id };
+      return {
+        participantId: p.id,
+        signed: true,
+        matchedPersonId: covering.person_id,
+        backfillFromResponseId: covering.id,
+      };
     }
 
-    return { participantId: p.id, signed: false, matchedPersonId: null };
+    return unsignedStatus(p.id);
   });
+
+  return [...covered, ...fallback];
+}
+
+/** Persist a mem_waiver_consents row so future checkWaivers() calls take
+ *  the fast primary path instead of re-running the fallback match. Never
+ *  throws — a failed backfill just means the fallback runs again next
+ *  time, not lost cover. The partial unique index on (participant_id)
+ *  where revoked_at is null makes a duplicate call harmless. */
+export async function recordWaiverConsent(params: {
+  participantId: string;
+  personId: string;
+  waiverResponseId: string;
+}): Promise<void> {
+  const service = createServiceClient();
+  const { error } = await service.from("mem_waiver_consents").insert({
+    participant_id: params.participantId,
+    person_id: params.personId,
+    waiver_response_id: params.waiverResponseId,
+  });
+  if (error && error.code !== "23505") {
+    console.error("mem_waiver_consents insert failed", params.participantId, error);
+  }
 }
 
 // --- Write path (Phase 1: in-app waiver) ---
@@ -134,7 +198,6 @@ export type SubmitWaiverInput = {
   emergencyContactPhone: string;
   emergencyContactRelationship: string;
   agreedPhoto: boolean;
-  consentUnaccompaniedDeparture: boolean | null;
 };
 
 export type SubmitWaiverResult =
@@ -219,7 +282,7 @@ export async function submitWaiver(
     participants[0].name.trim().toLowerCase() ===
       input.accountName.trim().toLowerCase();
 
-  const { error: responseError } = await service
+  const { data: response, error: responseError } = await service
     .from("waiver_responses")
     .insert({
       person_id: person.id,
@@ -235,9 +298,12 @@ export async function submitWaiver(
       emergency_contact_name: input.emergencyContactName,
       emergency_contact_phone: input.emergencyContactPhone,
       emergency_contact_relationship: input.emergencyContactRelationship,
-      consent_unaccompanied_departure: hasMinors
-        ? input.consentUnaccompaniedDeparture
-        : null,
+      // Departure consent moved to the per-booking flow (2026-08-10
+      // decision) — a standing yes/no here doesn't reflect that a parent's
+      // judgement can reasonably change session to session. Always null
+      // from Members going forward; recordDepartureConsent() in
+      // departure-consent.ts is the write path now.
+      consent_unaccompanied_departure: null,
       // Not tied to a specific session, so no session id and no
       // session-specific policy block.
       session_id: null,
@@ -253,7 +319,7 @@ export async function submitWaiver(
     })
     .select("id")
     .single();
-  if (responseError) {
+  if (responseError || !response) {
     console.error("waiver: response insert failed", responseError);
     return { ok: false, error: "Could not save the waiver — please try again." };
   }
@@ -269,6 +335,18 @@ export async function submitWaiver(
   if (linkError) {
     console.error("waiver: participant person_id link failed", person.id, linkError);
   }
+
+  // Grant coverage on the decoupled gate directly — no need to wait for
+  // checkWaivers()'s fallback path to backfill it next time.
+  await Promise.all(
+    input.participantIds.map((participantId) =>
+      recordWaiverConsent({
+        participantId,
+        personId: person.id,
+        waiverResponseId: response.id,
+      })
+    )
+  );
 
   // Deliberately does NOT copy the emergency contact onto mem_participants.
   // The standalone waiver form tells signers, in as many words, "Required

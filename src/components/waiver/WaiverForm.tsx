@@ -109,7 +109,6 @@ export function WaiverForm({
       agreed_tc: false,
       agreed_waiver: false,
       agreed_photo: false,
-      consent_unaccompanied_departure: null,
     },
   });
 
@@ -130,13 +129,7 @@ export function WaiverForm({
     const res = await fetch("/api/waivers", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...values,
-        // Only meaningful for a minor — don't record a stray false.
-        consent_unaccompanied_departure: coversMinor
-          ? (values.consent_unaccompanied_departure ?? false)
-          : null,
-      }),
+      body: JSON.stringify(values),
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -247,37 +240,13 @@ export function WaiverForm({
           {coversMinor && (
             <p className="text-sm text-muted">
               Required if the child is left unattended in the care of Empowr CIC.
+              You&apos;ll be asked separately at booking time whether they can
+              leave unaccompanied afterwards — that&apos;s a per-session choice,
+              not part of this waiver.
             </p>
           )}
         </div>
       </fieldset>
-
-      {coversMinor && (
-        <fieldset>
-          <legend className="font-extrabold text-black">
-            Leaving after the session
-          </legend>
-          <p className="mt-2 rounded-lg bg-blue-pale px-3.5 py-2.5 text-sm leading-relaxed text-blue-dark">
-            By default, under-18 skaters must be collected by a parent/guardian
-            or the named emergency contact at the end of the session. Only turn
-            this on if you give permission for them to leave the venue by
-            themselves, unaccompanied, once the session ends.
-          </p>
-          <label className="mt-3 flex items-start gap-2.5 text-sm font-semibold text-mid">
-            <input
-              type="checkbox"
-              className="mt-0.5 h-4 w-4 accent-blue"
-              {...register("consent_unaccompanied_departure")}
-            />
-            <span>
-              <span className="block font-bold text-black">
-                Permission to leave unaccompanied
-              </span>
-              I give permission for the child to go home by themselves
-            </span>
-          </label>
-        </fieldset>
-      )}
 
       <fieldset>
         <legend className="font-extrabold text-black">
