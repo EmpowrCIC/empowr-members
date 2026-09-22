@@ -11,6 +11,7 @@
 // participant's profile default, but the confirm_* checklist always
 // starts unchecked. Submitting nothing for a minor just means they're
 // collected in person as normal; it's optional, not a gate.
+import { creditToApply } from "@/lib/credit-math";
 import { useState } from "react";
 import Link from "next/link";
 import { Button, FormNotice } from "@/components/ui/form";
@@ -58,13 +59,16 @@ export function BookingForm({
   pricePence,
   earlyBird,
   ageLabel,
+  creditAvailable = null,
 }: {
   target: { occurrence_id?: string; course_run_id?: string };
   participants: BookingFormParticipant[];
   pricePence: number;
   earlyBird?: EarlyBirdOffer | null;
   ageLabel: string;
+  creditAvailable?: number | null;
 }) {
+  const [useCredit, setUseCredit] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   // Pre-selected when it is on offer: an early bird ticket is cheaper and
   // first-come, so defaulting to the standard price would charge people more
@@ -137,6 +141,8 @@ export function BookingForm({
           // Only the CHOICE travels. The price is resolved server-side from
           // the offering, so this cannot be used to name a cheaper one.
           early_bird: usingEarlyBird,
+          use_credit: useCredit,
+          expected_credit_pence: useCredit ? creditToApply(unitPence * selected.size, creditAvailable ?? 0) : 0,
         }),
       });
       const body = await response.json().catch(() => ({}));
@@ -210,6 +216,7 @@ export function BookingForm({
   }
 
   const total = unitPence * selected.size;
+  const appliedCredit = useCredit ? creditToApply(total, creditAvailable ?? 0) : 0;
 
   return (
     <div className="space-y-4">
@@ -376,6 +383,14 @@ export function BookingForm({
         </fieldset>
       )}
 
+      <section className="rounded-xl bg-blue-pale p-4 space-y-2">
+        <h3 className="font-bold">Member credit</h3>
+        {creditAvailable === null ? <p>Credit could not be loaded. Refresh before using credit.</p> : <>
+          <p>{formatPrice(creditAvailable)} available</p>
+          {creditAvailable > 0 && <label className="flex gap-2"><input type="checkbox" checked={useCredit} disabled={submitting || redirecting} onChange={e => setUseCredit(e.target.checked)} />Use credit towards this booking</label>}
+          {useCredit && <><p>Credit applied: {formatPrice(appliedCredit)} · To pay: {formatPrice(total-appliedCredit)}</p><p className="text-sm">Unused credit stays on your account. For small differences, we leave at least 30p to pay by card.</p></>}
+        </>}
+      </section>
       {error && <FormNotice tone="error">{error}</FormNotice>}
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
@@ -398,10 +413,10 @@ export function BookingForm({
           }
         >
           {redirecting
-            ? "Taking you to payment…"
+            ? "Opening your booking…"
             : submitting
               ? "Holding your space…"
-              : "Book and pay"}
+              : appliedCredit === total && total > 0 ? "Confirm using credit" : "Book and pay"}
         </Button>
       </div>
     </div>

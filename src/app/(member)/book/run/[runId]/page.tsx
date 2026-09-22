@@ -1,3 +1,4 @@
+import { memberCredits } from "@/lib/credits";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
@@ -40,6 +41,8 @@ export default async function BookCourseRunPage({
     offering,
     startDate
   );
+
+  const credit = await memberCredits(authed.account.id).catch(() => null);
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
@@ -88,6 +91,7 @@ export default async function BookCourseRunPage({
         </h2>
         <div className="mt-4">
           <BookingForm
+            creditAvailable={credit?.available ?? null}
             target={{ course_run_id: run.id }}
             participants={participants}
             pricePence={pricePence}

@@ -46,7 +46,7 @@ function cancellationPolicyLine(
   }
   return `Need to cancel? You can cancel this booking yourself from <a href="${membersUrl(
     "/bookings"
-  )}" style="color:${EMAIL_BRAND.blue};text-decoration:none;">your bookings</a> up to <strong>${CANCELLATION_CUTOFF_HOURS} hours</strong> before the session, and we'll refund the full amount to your card. Inside ${CANCELLATION_CUTOFF_HOURS} hours we can't refund the space.`;
+  )}" style="color:${EMAIL_BRAND.blue};text-decoration:none;">your bookings</a> up to <strong>${CANCELLATION_CUTOFF_HOURS} hours</strong> before the session, and we'll refund the card-paid amount and return any credit to its original note, keeping its expiry date. Inside ${CANCELLATION_CUTOFF_HOURS} hours we can't refund the space.`;
 }
 
 export function buildBookingConfirmationEmail(
@@ -67,6 +67,7 @@ export function buildBookingConfirmationEmail(
     detailRow("Who", names),
     detailRow("Where", venueLines(data.venue)),
     detailRow("Paid", esc(formatPrice(data.amountPaidPence))),
+    ...(data.creditPaidPence ? [detailRow("Member credit",esc(formatPrice(data.creditPaidPence))),detailRow("Card payment",esc(formatPrice(data.amountPaidPence-data.creditPaidPence)))] : []),
   ].join("");
 
   const kitBlock = data.kitList

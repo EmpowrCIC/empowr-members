@@ -24,6 +24,7 @@ export type BookingEmailSummary = {
    *  participantNames — always populated, one row per booking. */
   ticketUrls: string[];
   amountPaidPence: number;
+  creditPaidPence?: number;
   refundPolicy: "standard" | "non_refundable";
 };
 
@@ -62,5 +63,5 @@ export type StaffSubscriptionAlertData = {
  *  credit. Members have no self-serve path to either; this is always an
  *  admin decision (see occurrence-cancelled.ts). */
 export type CancellationOutcome =
-  | { kind: "refund"; amountPence: number }
+  | { kind: "refund"; amountPence: number; creditPence?: number }
   | { kind: "credit"; amountPence: number; expiresOn: string }; // ISO date

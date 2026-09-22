@@ -13,6 +13,7 @@ export const dynamic = "force-dynamic";
 type ConfirmationRow = {
   id: string;
   status: string;
+  credit_applied_pence: number;
   price_paid_pence: number | null;
   participant: { name: string } | null;
   occurrence: {
@@ -36,7 +37,7 @@ export default async function BookingConfirmationPage({
     const { data } = await supabase
       .from("mem_bookings")
       .select(
-        `id, status, price_paid_pence,
+        `id, status, price_paid_pence, credit_applied_pence,
          participant:mem_participants(name),
          occurrence:mem_occurrences(starts_at, ends_at, offering:mem_offerings(title)),
          course_run:mem_course_runs(label, offering:mem_offerings(title))`
@@ -66,6 +67,7 @@ export default async function BookingConfirmationPage({
     .filter(Boolean)
     .join(", ");
   const total = rows.reduce((sum, r) => sum + (r.price_paid_pence ?? 0), 0);
+  const credit = rows.reduce((n,r) => n+r.credit_applied_pence,0);
   const detail = [offering, when, names].filter(Boolean).join(" · ");
 
   const allConfirmed = rows.every((r) => r.status === "confirmed");
@@ -76,7 +78,7 @@ export default async function BookingConfirmationPage({
       <Panel
         icon={<CheckCircle2 className="mx-auto h-10 w-10 text-blue" aria-hidden />}
         title="Booking confirmed"
-        body={`${detail} — ${formatPrice(total)} paid. See you there!`}
+        body={`${detail} — ${formatPrice(total)} paid${credit ? ` (${formatPrice(credit)} credit, ${formatPrice(total-credit)} card)` : ""}. See you there!`}
       />
     );
   }

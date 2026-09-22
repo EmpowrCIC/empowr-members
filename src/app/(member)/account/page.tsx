@@ -1,3 +1,4 @@
+import { SessionCredit } from "@/components/account/SessionCredit";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
@@ -47,6 +48,7 @@ export default async function AccountPage({
         </FormNotice>
       )}
 
+      <SessionCredit accountId={authed.account.id} />
       <section className="rounded-2xl bg-card p-6 shadow-sm sm:p-8">
         <h2 className="text-xl font-extrabold text-black">Your details</h2>
         <p className="mt-1 text-sm text-mid">

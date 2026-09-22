@@ -1,3 +1,4 @@
+import { memberCredits } from "@/lib/credits";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
@@ -58,6 +59,8 @@ export default async function BookOccurrencePage({
     console.error("early bird read failed", occurrence.id, error);
   }
 
+  const credit = await memberCredits(authed.account.id).catch(() => null);
+
   return (
     <main className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
       <Link
@@ -102,6 +105,7 @@ export default async function BookOccurrencePage({
         </h2>
         <div className="mt-4">
           <BookingForm
+            creditAvailable={credit?.available ?? null}
             target={{ occurrence_id: occurrence.id }}
             participants={participants}
             pricePence={offering.price_pence}

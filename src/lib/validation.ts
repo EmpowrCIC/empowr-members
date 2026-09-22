@@ -179,6 +179,8 @@ export const bookingSchema = z
     // buying at the standard price — the allocation, the price and whether
     // early bird is offered at all are decided by mem_hold_bookings() under
     // its row lock, never here. This flag only carries the member's choice.
+    use_credit: z.boolean().default(false),
+    expected_credit_pence: z.number().int().min(0).max(100000000).default(0),
     early_bird: z.boolean().default(false),
   })
   .refine(

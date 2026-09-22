@@ -1,3 +1,4 @@
+import { creditCheckout } from "@/lib/credit-checkout";
 // POST /api/bookings — hold pending_payment bookings for the signed-in
 // member, then hand off to Stripe Checkout. Gates in order: participant
 // ownership → age eligibility → waiver (fail closed, no insert) → atomic
@@ -348,6 +349,11 @@ export async function POST(request: Request) {
   const cancelPath = occurrence_id
     ? `/book/${occurrence_id}`
     : `/book/run/${course_run_id}`;
+
+  if (parsed.data.use_credit) {
+    return creditCheckout({ authed, held, expectedCredit: parsed.data.expected_credit_pence,
+      origin, cancelPath, title: target.offering.title, when });
+  }
 
   try {
     const stripe = getStripe();

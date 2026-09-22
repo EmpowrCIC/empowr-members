@@ -18,6 +18,7 @@ import {
   currentPeriodEnd,
 } from "@/lib/stripe-subscription";
 import { reconcileMemberBookings } from "@/lib/materialize-member-bookings";
+import { reconcileBrevo } from "@/lib/reconcile-brevo";
 
 export async function POST(request: Request) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -39,6 +40,34 @@ export async function POST(request: Request) {
     );
   } catch {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
+  }
+
+  // Credit checkouts carry an explicit app marker on this shared account.
+  if (event.type === "checkout.session.completed" || event.type === "checkout.session.expired" ||
+      event.type === "checkout.session.async_payment_succeeded" || event.type === "checkout.session.async_payment_failed") {
+    const session = event.data.object;
+    const token = session.metadata?.credit_checkout_token;
+    const accountId = session.metadata?.account_id;
+    if (session.metadata?.app === "members" && token && accountId) {
+      const action = event.type === "checkout.session.expired" || event.type === "checkout.session.async_payment_failed"
+        ? "release" : session.payment_status === "paid" || session.payment_status === "no_payment_required" ? "paid" : "processing";
+      const db = createServiceClient();
+      const settled = await db.rpc("mem_settle_credit_checkout", {
+        p_token:token,p_account_id:accountId,p_session_id:session.id,
+        p_payment_intent:typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id ?? null,
+        p_amount:session.amount_total,p_action:action,
+      });
+      if (settled.error) {
+        console.error("Credit payment settlement needs retry/reconciliation",session.id,settled.error);
+        return NextResponse.json({error:"Retry"},{status:500});
+      }
+      if (action === "paid" && settled.data > 0) {
+        await sendBookingConfirmationForSession(db,session.id);
+        try { await reconcileBrevo(db,{accountIds:[accountId]}); }
+        catch (error) { console.error("Credit booking Brevo sync failed",error); }
+      }
+      return NextResponse.json({received:true});
+    }
   }
 
   if (
@@ -80,6 +109,14 @@ export async function POST(request: Request) {
         // swallowed internally and must NOT fail the webhook, or Stripe
         // would retry an already-paid, already-confirmed session.
         await sendBookingConfirmationForSession(service, session.id);
+        // Best-effort: communications must never turn a successful payment
+        // into a failed Stripe webhook. The nightly sweep retries it.
+        try {
+          const accountId = session.metadata?.account_id;
+          if (accountId) await reconcileBrevo(service, { accountIds: [accountId] });
+        } catch (error) {
+          console.error("[webhook] Brevo booking sync failed", session.id, error);
+        }
       } else {
         // Replay (already confirmed) is fine; paid-for-released-holds is
         // not — surface it loudly for a manual refund until Step 7 tooling.
@@ -198,6 +235,11 @@ export async function POST(request: Request) {
         subscription.id,
         error
       );
+    }
+    try {
+      await reconcileBrevo(service, { accountIds: [meta.accountId] });
+    } catch (error) {
+      console.error("[webhook] Brevo membership sync failed", subscription.id, error);
     }
   }
 

@@ -4,12 +4,7 @@
 // is a one-line swap. Do not inline any of these values in components
 // or API routes.
 
-/** Credits expire this many months after issue. Only issued via the
- *  Empowr-initiated occurrence-cancel flow (admin picks refund or
- *  credit) — members STILL have no self-serve path to a credit, even
- *  though self-serve cancellation returned with Programme Policies v1.2.
- *  Redemption is Phase 2 Step 5 and is unbuilt, so a member-chosen
- *  credit would be an unspendable balance. Revisit when Step 5 lands. */
+/** Staff-issued account credit expires this many months after issue. */
 export const CREDIT_EXPIRY_MONTHS = 12;
 
 /** Self-serve cancellation cutoff — at or beyond this many hours before

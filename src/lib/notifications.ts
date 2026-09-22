@@ -36,6 +36,7 @@ type OfferingJoin = {
 type BookingRow = {
   id: string;
   account_id: string;
+  credit_applied_pence: number;
   price_paid_pence: number | null;
   source: "online" | "walk_in" | "member";
   participant: { name: string } | null;
@@ -54,7 +55,7 @@ type BookingRow = {
 };
 
 const BOOKING_EMAIL_SELECT = `
-  id, account_id, price_paid_pence, source,
+  id, account_id, price_paid_pence, credit_applied_pence, source,
   participant:mem_participants(name),
   occurrence:mem_occurrences(
     starts_at, ends_at,
@@ -116,6 +117,7 @@ function summariseRows(rows: BookingRow[]): BookingEmailSummary | null {
       .filter((n): n is string => Boolean(n)),
     ticketUrls: rows.map((r) => membersUrl(`/ticket/${r.id}`)),
     amountPaidPence: rows.reduce((sum, r) => sum + (r.price_paid_pence ?? 0), 0),
+    creditPaidPence: rows.reduce((sum,r) => sum+(r.credit_applied_pence ?? 0),0),
     refundPolicy: offering.refund_policy,
   };
 }

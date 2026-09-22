@@ -25,6 +25,7 @@ export type BookingStatus =
   | "no_show";
 
 export type Booking = {
+  credit_applied_pence: number;
   id: string;
   account_id: string;
   participant_id: string;

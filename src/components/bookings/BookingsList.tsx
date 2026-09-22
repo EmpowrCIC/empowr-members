@@ -9,8 +9,8 @@
 // re-checks it and is authoritative — a page left open past the cutoff
 // gets refused there, not here.
 //
-// Refund to the card is the only outcome offered. See lib/cancellation.ts
-// for why there is no credit option.
+// Self-serve cancellation returns the original payment tender. New credit
+// notes in lieu of card refunds are a staff decision.
 import Link from "next/link";
 import { useState } from "react";
 import { CalendarClock, CalendarX2, Ticket } from "lucide-react";
@@ -26,6 +26,7 @@ export type BookingView = {
   when: string;
   participantName: string;
   pricePaidPence: number | null;
+  creditPaidPence: number;
   startsAtMs: number;
   /** Only set for confirmed bookings — null means "not applicable"
    *  (already settled, or still pending payment). */
@@ -151,7 +152,7 @@ function BookingSummary({ booking }: { booking: BookingView }) {
         </p>
         {booking.pricePaidPence !== null && (
           <p className="text-sm font-semibold text-muted">
-            {formatPrice(booking.pricePaidPence)} paid
+            {formatPrice(booking.pricePaidPence)} paid{booking.creditPaidPence > 0 && ` (${formatPrice(booking.creditPaidPence)} credit)`}
           </p>
         )}
       </div>
@@ -223,7 +224,7 @@ function BookingRow({
             <div className="space-y-2">
               <p className="text-sm font-semibold text-mid">
                 {booking.pricePaidPence
-                  ? `We'll refund ${formatPrice(booking.pricePaidPence)} to the card you paid with. Refunds usually land within 5–10 working days.`
+                  ? `We will refund ${formatPrice(booking.pricePaidPence-booking.creditPaidPence)} to your card${booking.creditPaidPence ? ` and return ${formatPrice(booking.creditPaidPence)} to your original credit notes, keeping their expiry dates` : ""}. Card refunds usually land within 5–10 working days.`
                   : "We'll cancel this booking and free the place."}
               </p>
               {error && <FormNotice tone="error">{error}</FormNotice>}

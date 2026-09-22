@@ -18,6 +18,7 @@ type OfferingJoin = { title: string; refund_policy: "standard" | "non_refundable
 type BookingRow = {
   id: string;
   status: string;
+  credit_applied_pence: number;
   price_paid_pence: number | null;
   created_at: string;
   participant: { name: string } | null;
@@ -55,7 +56,7 @@ export default async function BookingsPage() {
   const { data } = await supabase
     .from("mem_bookings")
     .select(
-      `id, status, price_paid_pence, created_at,
+      `id, status, price_paid_pence, credit_applied_pence, created_at,
        participant:mem_participants(name),
        occurrence:mem_occurrences(starts_at, ends_at, offering:mem_offerings(title, refund_policy)),
        course_run:mem_course_runs(label, starts_on, ends_on, offering:mem_offerings(title, refund_policy))`
@@ -88,6 +89,7 @@ export default async function BookingsPage() {
         when,
         participantName: row.participant?.name ?? "",
         pricePaidPence: row.price_paid_pence,
+        creditPaidPence: row.credit_applied_pence,
         startsAtMs: new Date(startsAt).getTime(),
       };
     })

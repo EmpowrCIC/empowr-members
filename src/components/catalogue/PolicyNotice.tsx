@@ -21,7 +21,7 @@ export function PolicyNotice({
       <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
       {refundPolicy === "non_refundable"
         ? "This booking is non-refundable and cannot be cancelled or moved, whatever notice is given."
-        : `Cancel from your account at least ${CANCELLATION_CUTOFF_HOURS} hours before the session and we'll refund the full amount to your card. Inside ${CANCELLATION_CUTOFF_HOURS} hours, bookings can't be cancelled and no refund is due.`}
+        : `Cancel from your account at least ${CANCELLATION_CUTOFF_HOURS} hours before the session and we'll refund the card-paid amount and return any credit to its original note, keeping its expiry date. Inside ${CANCELLATION_CUTOFF_HOURS} hours, bookings can't be cancelled and no refund is due.`}
     </p>
   );
 }
