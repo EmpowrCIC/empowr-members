@@ -61,6 +61,8 @@ Customers choose duration and see dated availability. Past or conflicting interv
 
 Engineering requirements: reserve intervals atomically in the booking system; recheck conflicts at checkout; handle payment callbacks idempotently; reconcile late payments/expired holds explicitly. Google Calendar alone is not a concurrency lock. If calendar synchronisation fails after payment, retain the confirmed reservation in the booking system and alert staff for retry/reconciliation.
 
+**Checkout target, verified against current code:** the member checkout (`BookingBasketItem`) currently requires exactly one of `occurrence_id` or `course_run_id` — a private booking is neither; it is an exclusive time interval on a date. This is a new checkout target type, not a parameter on the existing one. Design it explicitly rather than forcing it through the occurrence/course-run shape.
+
 ## Equipment and coaching rules
 
 For each coaching place offer own equipment, skate hire with protective gear, and the protective-gear-only option shown in the preview (price confirmation outstanding).
@@ -100,6 +102,8 @@ Show registered count versus booked places, equipment choices received and missi
 - Guests cannot access the host's amount paid, receipt, billing information or booking-management functions. Enforce this server-side, including API responses and links, not merely by hiding UI.
 - The host sees preparation statuses, not private waiver answers. Restrict staff details to authorised roles.
 
+**Cross-account dependency, verified against current code:** the guest-invitation flow spans multiple member accounts registering against one booking. `checkWaivers()` currently takes a single account email, and the walk-in route explicitly refuses a participant set spanning more than one `mem_account`. This is the same cross-account primitive already identified as unbuilt elsewhere in the product (door group-payment). Private bookings cannot ship the guest-invitation flow without it — build or confirm this primitive alongside this feature, not after.
+
 ## Admin: manual bookings, check-in and blocks
 
 Staff can add bookings already agreed by email, including existing paid birthday parties. Capture host member, type, date/time, quantities and payment status. Mark already-paid bookings without charging again. Manual bookings must obey the same conflict rules and reserve the corresponding calendar interval.
@@ -113,6 +117,8 @@ Opening a booking shows host, type, date/time, searchable guest list, membership
 Covered attendees check in without payment. Keep the separate £20 pay-on-the-door option following the existing cashless flow: payment must succeed before check-in. Confirm which extra attendees this option applies to and how it increases capacity. Allow undoing an accidental check-in without treating it as a payment refund.
 
 Staff can block 3–4pm, 4–5pm or the full 3–5pm, with an optional internal reason, and later unblock it. Do not expose the reason to customers. Removing a manual block must not remove overlapping booking reservations or unrelated calendar events. Flag paid-booking conflicts rather than overwriting or cancelling the booking.
+
+**Reconcile with `admin-manual-booking.md` before building.** A general-purpose admin manual-booking spec already exists (proposed, unbuilt), covering the same ground: staff-entered bookings for members who can't complete Checkout, with a `payment_handling` enum (`paid_bank_transfer` / `paid_stripe_manual` / `comp` / `owed`), a mandatory audit trail (`created_by_user_id`, `note`, `created_at`), and `getAuthedAdmin()`-only access. This section must reuse that mechanism rather than defining a second, lighter one — a private booking entered manually needs the same audit trail as any other manual booking, and two parallel implementations will drift.
 
 ## Cancellation and transfer policy
 
@@ -128,15 +134,15 @@ Still to build or fully represent: real calendar integration, persistence, payme
 
 ## Outstanding decisions before launch
 
-1. Calendar/account to connect, eligible dates and classification of existing events.
+1. **Calendar/account to connect, eligible dates and classification of existing events.** Note: there is currently no Google Calendar integration anywhere in this codebase — this is a from-scratch integration, not a config choice on existing plumbing. Size accordingly.
 2. Maximum birthday/group capacity; handling and payment for added attendees.
 3. Final coaching catalogue rates/minimums; protective-gear-only price.
-4. Online payment provider. Existing project documents reference Stripe; SumUp was demonstrated for door payments. Inspect existing integration rather than assuming a provider change.
+4. ~~Online payment provider.~~ **Resolved by code inspection:** every existing payment path (member basket checkout, walk-ins, door check-in) uses Stripe — online payment for private bookings should too. The door "SumUp card reader" option was a prototype artifact only, not a real integration; the admin prototype has been corrected to the existing QR-only door flow. If Empowr actually runs a physical SumUp terminal at the door for something else, that's a separate hardware question, not a payment-provider decision for this feature.
 5. Custom enquiry destination email and enquiry fields (contact, preferred date, estimated numbers, requirements).
 6. Bookings or equipment changes within the two-week birthday deadline and equipment availability checks.
 7. Missing-waiver arrivals, especially children without their parent present.
 8. Empowr-initiated inability to deliver a paid booking.
-9. Hold duration and reminder schedule.
+9. **Hold duration and reminder schedule.** Note: Stripe Checkout's minimum session expiry is ~30 minutes, and every existing hold on this platform releases at 31–41 minutes. The 10-minute figure in the customer preview is a demo simplification only — the real value cannot go below the Stripe floor if this reuses Checkout.
 
 ## Acceptance scenarios
 
