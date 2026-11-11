@@ -19,7 +19,8 @@
     "verify:auth-links": "node --import ../ops/scripts/register-alias.mjs --test ../ops/scripts/verify-auth-links.ts",
     "render:auth-emails": "node --import ../ops/scripts/register-alias.mjs ../ops/scripts/render-auth-templates.ts",
     "check:auth-emails": "node ../ops/scripts/check-auth-templates.mjs",
-    "apply:auth-emails": "node ../ops/scripts/apply-auth-templates.mjs"
+    "apply:auth-emails": "node ../ops/scripts/apply-auth-templates.mjs",
+    "verify:shop-orders": "node --test ../ops/scripts/verify-shop-orders.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
@@ -52,4 +53,3 @@
     "typescript": "^5.8.0"
   }
 }
-

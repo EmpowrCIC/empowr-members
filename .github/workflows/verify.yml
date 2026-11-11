@@ -66,3 +66,4 @@ jobs:
           npm run verify:brevo
           npm run verify:auth-links
           npm run verify:emergency-contact
+          npm run verify:shop-orders
